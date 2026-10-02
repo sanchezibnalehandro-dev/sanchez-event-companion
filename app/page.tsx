@@ -1,30 +1,20 @@
+import { redirect } from "next/navigation";
+
 export default function HomePage() {
+  if (process.env.EVENT_COMPANION_LOCAL_DEMO === "true") {
+    redirect("/e/future-industry-day");
+  }
+
   return (
-    <main className="shell landing-shell">
-      <section className="landing-intro">
-        <p className="eyebrow">TODAY → PROGRAM → LIVE</p>
-        <h1>Событие начинается с ясного ответа: что происходит сейчас?</h1>
-        <p className="lede">
-          Отдельный web-first продукт для программы события. LIVE Q&amp;A подключается
-          безопасной внешней ссылкой и остаётся независимой системой.
-        </p>
-      </section>
-      <section className="boundary-grid" aria-label="Границы продукта">
-        <article>
-          <span>01</span>
-          <h2>TODAY</h2>
-          <p>Текущая и следующая сессии определяются состоянием события.</p>
-        </article>
-        <article>
-          <span>02</span>
-          <h2>PROGRAM</h2>
-          <p>Публичный маршрут получает только опубликованную программу.</p>
-        </article>
-        <article>
-          <span>03</span>
-          <h2>LIVE</h2>
-          <p>Переход в существующий SANCHEZ LIVE Q&amp;A без iframe и общей базы.</p>
-        </article>
+    <main className="guest-shell root-shell">
+      <section className="neutral-home" aria-labelledby="home-title">
+        <div className="guest-brand" aria-label="SANCHEZ">
+          <span className="guest-brand-mark" aria-hidden="true">S</span>
+          <span className="guest-brand-name">SANCHEZ</span>
+        </div>
+        <p className="guest-kicker">Программа события</p>
+        <h1 id="home-title">Откройте ссылку вашего события</h1>
+        <p>Программа и вопросы спикерам доступны по персональной ссылке от организатора.</p>
       </section>
     </main>
   );

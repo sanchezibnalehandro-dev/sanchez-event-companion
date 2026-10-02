@@ -13,12 +13,14 @@ export function SessionCard({
   session,
   label,
   status,
+  isNext = false,
   showSummary = false,
 }: {
   program: ProgramAggregate;
   session: Session;
   label?: string;
   status?: SessionTimelineStatus;
+  isNext?: boolean;
   showSummary?: boolean;
 }) {
   const location = getSessionLocation(program, session);
@@ -28,17 +30,6 @@ export function SessionCard({
     <article className={`session-card${status ? ` session-${status}` : ""}`}>
       <div className="session-time">
         {label ? <span className="session-label">{label}</span> : null}
-        {status ? (
-          <span className={`timeline-status ${status}`}>
-            {status === "current"
-              ? "Сейчас"
-              : status === "concurrent"
-                ? "Идёт параллельно"
-                : status === "past"
-                  ? "Завершено"
-                  : "Далее"}
-          </span>
-        ) : null}
         <time dateTime={session.startsAt}>
           {formatEventTime(session.startsAt, program.event.timezone)}
         </time>
@@ -48,6 +39,13 @@ export function SessionCard({
         </time>
       </div>
       <div className="session-copy">
+        {status === "current" || status === "concurrent" || isNext ? (
+          <div className="session-badges">
+            {status === "current" ? <span className="timeline-status current">Сейчас</span> : null}
+            {status === "concurrent" ? <span className="timeline-status concurrent">Параллельно</span> : null}
+            {isNext ? <span className="timeline-status next">Следующий</span> : null}
+          </div>
+        ) : null}
         <h2>
           <Link href={`/e/${program.event.slug}/sessions/${session.slug}`}>
             {session.title}

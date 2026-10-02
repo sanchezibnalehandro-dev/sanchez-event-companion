@@ -24,7 +24,7 @@ export default async function SessionPage({
   if (result.status === "not_found") notFound();
   if (result.status === "unavailable") {
     return (
-      <main className="shell narrow-shell">
+      <main className="guest-shell state-shell">
         <ComingSoonCard />
       </main>
     );

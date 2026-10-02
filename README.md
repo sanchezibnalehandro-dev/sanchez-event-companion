@@ -64,9 +64,13 @@ overwriting data.
 
 Demo routes:
 
-- Guest TODAY: `/e/future-industry-day`
+- Guest Hub: `/e/future-industry-day`
 - Guest PROGRAM: `/e/future-industry-day/program`
 - Organizer: `/organizer/events/demo-event-2026/program`
+
+When `EVENT_COMPANION_LOCAL_DEMO=true`, the root route redirects to the seeded demo
+event. Without that local-demo flag, `/` stays neutral and asks the guest to use the
+event link supplied by the organizer; it does not assume a production event slug.
 
 ## Commands
 
