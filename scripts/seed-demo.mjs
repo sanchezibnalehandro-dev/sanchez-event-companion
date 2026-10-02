@@ -52,6 +52,8 @@ const sessions = [
   ["demo-session-break", event.id, "coffee-and-connections", "Кофе и знакомства", "Пауза без LIVE Q&A: время перейти в холл и продолжить разговор лично.", at(90), at(120), locations[1][0], 3],
   ["demo-session-workshop", event.id, "prototype-workshop", "Воркшоп: прототип за 60 минут", "Командная практика по превращению производственной гипотезы в проверяемый сценарий.", at(150), at(210), locations[1][0], 4],
   ["demo-session-closing", event.id, "closing-reflection", "Финальная рефлексия", "Что участники забирают в работу после события.", at(225), at(270), locations[0][0], 5],
+  ["demo-session-lab-briefing", event.id, "lab-briefing", "Лаборатория: быстрый брифинг", "Параллельный практический разбор в лаборатории.", at(-60), at(-5), locations[1][0], 6],
+  ["demo-session-lab-roundtable", event.id, "lab-roundtable", "Круглый стол в лаборатории", "Частично пересекающийся трек для проверки многозального расписания.", at(45), at(105), locations[1][0], 7],
 ];
 
 database.exec("BEGIN IMMEDIATE");
@@ -96,6 +98,8 @@ try {
     [sessions[4][0], speakers[1][0], 0, "Фасилитатор"],
     [sessions[4][0], speakers[2][0], 1, "Фасилитатор"],
     [sessions[5][0], speakers[3][0], 0, "Ведущий"],
+    [sessions[6][0], speakers[1][0], 0, "Эксперт"],
+    [sessions[7][0], speakers[2][0], 0, "Модератор"],
   ].forEach((link) => insertSessionSpeaker.run(...link));
 
   database

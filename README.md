@@ -19,7 +19,7 @@ Implemented:
 - one-transaction session reorder;
 - explicit publish/unpublish;
 - explicit set/clear manual current override;
-- safe local demo seed with six fictional sessions, gaps, a panel and a non-LIVE break;
+- safe local demo seed with eight fictional sessions, parallel locations, gaps, a panel and a non-LIVE break;
 - server-side publication filtering;
 - link-only SANCHEZ LIVE Q&A adapter.
 

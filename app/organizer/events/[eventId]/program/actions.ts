@@ -15,6 +15,10 @@ function value(formData: FormData, name: string): string {
   return typeof field === "string" ? field.trim() : "";
 }
 
+function checked(formData: FormData, name: string): boolean {
+  return formData.get(name) === "on";
+}
+
 function feedbackUrl(eventId: string, tone: "success" | "error", message: string): string {
   return `/organizer/events/${encodeURIComponent(eventId)}/program?tone=${tone}&message=${encodeURIComponent(message)}`;
 }
@@ -111,10 +115,13 @@ export async function updateSessionAction(formData: FormData): Promise<never> {
     const existing = program.sessions.find((session) => session.id === sessionId);
     if (!existing) throw new Error("Сессия не найдена");
     getRepository().updateSession(
-      sessionFromForm(formData, program, {
-        id: existing.id,
-        sortOrder: existing.sortOrder,
-      }),
+      {
+        ...sessionFromForm(formData, program, {
+          id: existing.id,
+          sortOrder: existing.sortOrder,
+        }),
+        autoShiftFollowing: checked(formData, "autoShiftFollowing"),
+      },
     );
   });
 }

@@ -5,6 +5,7 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import type {
   CompanionRepository,
   PublicProgramRead,
+  SessionUpdate,
   SessionWrite,
 } from "@/lib/data/repository";
 import type {
@@ -316,9 +317,82 @@ export class SqliteCompanionRepository implements CompanionRepository {
     });
   }
 
-  updateSession(write: SessionWrite): void {
+  updateSession(write: SessionUpdate): void {
     validateSession(write.session);
     this.transaction(() => {
+      const existingRow = this.database
+        .prepare(
+          `SELECT starts_at, ends_at, location_id FROM sessions
+           WHERE id = ? AND event_id = ?`,
+        )
+        .get(write.session.id, write.session.eventId) as Row | undefined;
+      if (!existingRow) throw new Error("Session was not found");
+
+      const existingLocationId = nullableText(existingRow, "location_id");
+      const locationUnchanged = existingLocationId === write.session.locationId;
+      const oldStart = text(existingRow, "starts_at");
+      const oldEnd = text(existingRow, "ends_at");
+      const laneRows = (locationId: string | null, threshold: string): Row[] =>
+        this.database
+          .prepare(
+            `SELECT id, starts_at, ends_at FROM sessions
+             WHERE event_id = ? AND id <> ?
+               AND ((location_id = ?) OR (location_id IS NULL AND ? IS NULL))
+               AND starts_at >= ?
+             ORDER BY starts_at, sort_order, id`,
+          )
+          .all(
+            write.session.eventId,
+            write.session.id,
+            locationId,
+            locationId,
+            threshold,
+          ) as Row[];
+      const shiftRows = (rows: readonly Row[], delta: number): void => {
+        if (delta === 0 || rows.length === 0) return;
+        const shift = this.database.prepare(
+          "UPDATE sessions SET starts_at = ?, ends_at = ? WHERE id = ? AND event_id = ?",
+        );
+        rows.forEach((row) => {
+          shift.run(
+            new Date(new Date(text(row, "starts_at")).getTime() + delta).toISOString(),
+            new Date(new Date(text(row, "ends_at")).getTime() + delta).toISOString(),
+            text(row, "id"),
+            write.session.eventId,
+          );
+        });
+      };
+
+      if (write.autoShiftFollowing && locationUnchanged) {
+        const delta = new Date(write.session.endsAt).getTime() - new Date(oldEnd).getTime();
+        shiftRows(laneRows(existingLocationId, oldEnd), delta);
+      } else if (write.autoShiftFollowing) {
+        const destinationRows = laneRows(write.session.locationId, "0000-01-01T00:00:00.000Z");
+        const newStartEpoch = new Date(write.session.startsAt).getTime();
+        const destinationOccupied = destinationRows.some((row) => {
+          const startsAt = new Date(text(row, "starts_at")).getTime();
+          const endsAt = new Date(text(row, "ends_at")).getTime();
+          return startsAt < newStartEpoch && newStartEpoch < endsAt;
+        });
+        if (destinationOccupied) {
+          throw new Error("destination time is already occupied");
+        }
+
+        const oldDuration = new Date(oldEnd).getTime() - new Date(oldStart).getTime();
+        const destinationFollowing = destinationRows.filter(
+          (row) => new Date(text(row, "starts_at")).getTime() >= newStartEpoch,
+        );
+        const nextStart = destinationFollowing[0]
+          ? new Date(text(destinationFollowing[0], "starts_at")).getTime()
+          : null;
+        const overlap = nextStart === null
+          ? 0
+          : Math.max(0, new Date(write.session.endsAt).getTime() - nextStart);
+
+        shiftRows(laneRows(existingLocationId, oldEnd), -oldDuration);
+        shiftRows(destinationFollowing, overlap);
+      }
+
       const result = this.database
         .prepare(
           `UPDATE sessions SET
