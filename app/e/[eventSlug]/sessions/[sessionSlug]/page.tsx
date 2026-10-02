@@ -19,7 +19,7 @@ export default async function SessionPage({
   params: Promise<{ eventSlug: string; sessionSlug: string }>;
 }) {
   const { eventSlug, sessionSlug } = await params;
-  const result = getRepository().getPublicProgramBySlug(eventSlug);
+  const result = await getRepository().getPublicProgramBySlug(eventSlug);
 
   if (result.status === "not_found") notFound();
   if (result.status === "unavailable") {

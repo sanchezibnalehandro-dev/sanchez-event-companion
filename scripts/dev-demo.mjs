@@ -10,6 +10,7 @@ const child = spawn(
       ...process.env,
       NODE_ENV: "development",
       EVENT_COMPANION_LOCAL_DEMO: "true",
+      EVENT_COMPANION_DATABASE_DRIVER: "sqlite",
     },
     stdio: "inherit",
   },

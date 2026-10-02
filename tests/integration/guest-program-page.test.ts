@@ -26,7 +26,7 @@ describe("guest program page", () => {
   });
 
   it("renders a manual current hero with all speakers and no false LIVE or countdown", async () => {
-    repositoryMock.getPublicProgramBySlug.mockReturnValue({
+    repositoryMock.getPublicProgramBySlug.mockResolvedValue({
       status: "published",
       program: makeProgram({
         runtime: {
@@ -51,7 +51,7 @@ describe("guest program page", () => {
   });
 
   it("keeps a real schedule gap and marks the actual next session", async () => {
-    repositoryMock.getPublicProgramBySlug.mockReturnValue({
+    repositoryMock.getPublicProgramBySlug.mockResolvedValue({
       status: "published",
       program: makeProgram({ runtime: null }),
     });
@@ -81,7 +81,7 @@ describe("guest program page", () => {
       endsAt: "2026-10-02T08:15:00.000Z",
       locationId: hallTwo.id,
     };
-    repositoryMock.getPublicProgramBySlug.mockReturnValue({
+    repositoryMock.getPublicProgramBySlug.mockResolvedValue({
       status: "published",
       program: makeProgram({
         locations: [location, hallTwo],

@@ -309,7 +309,7 @@ export class SqliteCompanionRepository implements CompanionRepository {
       .run(mapping.sessionId, mapping.integrationId, mapping.externalRoomSlug);
   }
 
-  createSession(write: SessionWrite): void {
+  async createSession(write: SessionWrite): Promise<void> {
     validateSession(write.session);
     this.transaction(() => {
       this.saveSession(write.session);
@@ -317,7 +317,7 @@ export class SqliteCompanionRepository implements CompanionRepository {
     });
   }
 
-  updateSession(write: SessionUpdate): void {
+  async updateSession(write: SessionUpdate): Promise<void> {
     validateSession(write.session);
     this.transaction(() => {
       const existingRow = this.database
@@ -434,7 +434,7 @@ export class SqliteCompanionRepository implements CompanionRepository {
     });
   }
 
-  deleteSession(eventId: string, sessionId: string): void {
+  async deleteSession(eventId: string, sessionId: string): Promise<void> {
     this.transaction(() => {
       const runtime = this.database
         .prepare(
@@ -452,7 +452,7 @@ export class SqliteCompanionRepository implements CompanionRepository {
     });
   }
 
-  reorderSessions(eventId: string, orderedSessionIds: readonly string[]): void {
+  async reorderSessions(eventId: string, orderedSessionIds: readonly string[]): Promise<void> {
     this.transaction(() => {
       const rows = this.database
         .prepare("SELECT id FROM sessions WHERE event_id = ? ORDER BY id")
@@ -477,7 +477,7 @@ export class SqliteCompanionRepository implements CompanionRepository {
     });
   }
 
-  setProgramPublished(eventId: string, publishedAt: string): void {
+  async setProgramPublished(eventId: string, publishedAt: string): Promise<void> {
     const result = this.database
       .prepare(
         "UPDATE events SET program_state = 'published', published_at = ? WHERE id = ?",
@@ -486,19 +486,19 @@ export class SqliteCompanionRepository implements CompanionRepository {
     if (result.changes !== 1) throw new Error("Event was not found");
   }
 
-  setProgramUnpublished(eventId: string): void {
+  async setProgramUnpublished(eventId: string): Promise<void> {
     const result = this.database
       .prepare("UPDATE events SET program_state = 'unpublished' WHERE id = ?")
       .run(eventId);
     if (result.changes !== 1) throw new Error("Event was not found");
   }
 
-  setManualCurrentSession(
+  async setManualCurrentSession(
     eventId: string,
     sessionId: string,
     actorId: string,
     setAt: string,
-  ): void {
+  ): Promise<void> {
     const result = this.database
       .prepare("SELECT id FROM sessions WHERE id = ? AND event_id = ?")
       .get(sessionId, eventId);
@@ -517,7 +517,7 @@ export class SqliteCompanionRepository implements CompanionRepository {
       .run(eventId, sessionId, normalizeInstant(setAt), actorId);
   }
 
-  clearManualCurrentSession(eventId: string): void {
+  async clearManualCurrentSession(eventId: string): Promise<void> {
     this.database
       .prepare(
         `INSERT INTO event_runtime (
@@ -531,7 +531,7 @@ export class SqliteCompanionRepository implements CompanionRepository {
       .run(eventId);
   }
 
-  getPublicProgramBySlug(eventSlug: string): PublicProgramRead {
+  async getPublicProgramBySlug(eventSlug: string): Promise<PublicProgramRead> {
     return this.readTransaction(() => {
       const visibility = this.database
         .prepare("SELECT id, program_state FROM events WHERE slug = ?")
@@ -556,7 +556,7 @@ export class SqliteCompanionRepository implements CompanionRepository {
     });
   }
 
-  getOrganizerProgram(eventId: string): ProgramAggregate | null {
+  async getOrganizerProgram(eventId: string): Promise<ProgramAggregate | null> {
     const program = this.getProgramByEventId(eventId);
     if (program) validateProgramAggregate(program);
     return program;

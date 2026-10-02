@@ -23,7 +23,7 @@ describe("guest hub page", () => {
   });
 
   it("shows only real guest actions and disables Q&A without a current mapping", async () => {
-    repositoryMock.getPublicProgramBySlug.mockReturnValue({
+    repositoryMock.getPublicProgramBySlug.mockResolvedValue({
       status: "published",
       program: makeProgram({ sessions: [], sessionSpeakers: [], runtime: null }),
     });
@@ -42,7 +42,7 @@ describe("guest hub page", () => {
   it("links to the existing LIVE destination without claiming an open status", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-02T07:30:00.000Z"));
-    repositoryMock.getPublicProgramBySlug.mockReturnValue({
+    repositoryMock.getPublicProgramBySlug.mockResolvedValue({
       status: "published",
       program: makeProgram({
         runtime: {

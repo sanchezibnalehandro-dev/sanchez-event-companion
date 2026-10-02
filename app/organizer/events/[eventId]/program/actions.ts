@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 
 import { getRequestOrganizer } from "@/lib/auth/request-organizer";
 import { getRepository } from "@/lib/data/database";
+import type { CompanionRepository } from "@/lib/data/repository";
 import { eventLocalDateTimeToInstant } from "@/lib/domain/presentation";
 import type { ProgramAggregate, Session } from "@/lib/domain/types";
 
@@ -36,18 +37,22 @@ function revalidateProgram(program: ProgramAggregate): void {
 async function runOrganizerAction(
   eventId: string,
   successMessage: string,
-  operation: (program: ProgramAggregate, actorId: string) => void,
+  operation: (
+    repository: CompanionRepository,
+    program: ProgramAggregate,
+    actorId: string,
+  ) => Promise<void>,
 ): Promise<never> {
   const actor = await getRequestOrganizer();
   if (!actor) redirect(feedbackUrl(eventId, "error", "Доступ организатора закрыт"));
 
   const repository = getRepository();
-  const program = repository.getOrganizerProgram(eventId);
+  const program = await repository.getOrganizerProgram(eventId);
   if (!program) redirect(feedbackUrl(eventId, "error", "Событие не найдено"));
 
   let outcome: { tone: "success" | "error"; message: string };
   try {
-    operation(program, actor.id);
+    await operation(repository, program, actor.id);
     revalidateProgram(program);
     outcome = { tone: "success", message: successMessage };
   } catch (error) {
@@ -99,10 +104,10 @@ function sessionFromForm(
 
 export async function createSessionAction(formData: FormData): Promise<never> {
   const eventId = value(formData, "eventId");
-  return runOrganizerAction(eventId, "Сессия создана", (program) => {
+  return runOrganizerAction(eventId, "Сессия создана", async (repository, program) => {
     const nextSortOrder =
       Math.max(-1, ...program.sessions.map((session) => session.sortOrder)) + 1;
-    getRepository().createSession(
+    await repository.createSession(
       sessionFromForm(formData, program, { id: randomUUID(), sortOrder: nextSortOrder }),
     );
   });
@@ -111,10 +116,10 @@ export async function createSessionAction(formData: FormData): Promise<never> {
 export async function updateSessionAction(formData: FormData): Promise<never> {
   const eventId = value(formData, "eventId");
   const sessionId = value(formData, "sessionId");
-  return runOrganizerAction(eventId, "Сессия обновлена", (program) => {
+  return runOrganizerAction(eventId, "Сессия обновлена", async (repository, program) => {
     const existing = program.sessions.find((session) => session.id === sessionId);
     if (!existing) throw new Error("Сессия не найдена");
-    getRepository().updateSession(
+    await repository.updateSession(
       {
         ...sessionFromForm(formData, program, {
           id: existing.id,
@@ -129,41 +134,41 @@ export async function updateSessionAction(formData: FormData): Promise<never> {
 export async function deleteSessionAction(formData: FormData): Promise<never> {
   const eventId = value(formData, "eventId");
   const sessionId = value(formData, "sessionId");
-  return runOrganizerAction(eventId, "Сессия удалена", () => {
-    getRepository().deleteSession(eventId, sessionId);
+  return runOrganizerAction(eventId, "Сессия удалена", async (repository) => {
+    await repository.deleteSession(eventId, sessionId);
   });
 }
 
 export async function reorderSessionsAction(formData: FormData): Promise<never> {
   const eventId = value(formData, "eventId");
-  return runOrganizerAction(eventId, "Новый порядок сохранён", () => {
+  return runOrganizerAction(eventId, "Новый порядок сохранён", async (repository) => {
     const parsed: unknown = JSON.parse(value(formData, "orderedSessionIds"));
     if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== "string")) {
       throw new Error("Некорректный набор сессий для сортировки");
     }
-    getRepository().reorderSessions(eventId, parsed);
+    await repository.reorderSessions(eventId, parsed);
   });
 }
 
 export async function publishProgramAction(formData: FormData): Promise<never> {
   const eventId = value(formData, "eventId");
-  return runOrganizerAction(eventId, "Программа опубликована", () => {
-    getRepository().setProgramPublished(eventId, new Date().toISOString());
+  return runOrganizerAction(eventId, "Программа опубликована", async (repository) => {
+    await repository.setProgramPublished(eventId, new Date().toISOString());
   });
 }
 
 export async function unpublishProgramAction(formData: FormData): Promise<never> {
   const eventId = value(formData, "eventId");
-  return runOrganizerAction(eventId, "Программа снята с публикации", () => {
-    getRepository().setProgramUnpublished(eventId);
+  return runOrganizerAction(eventId, "Программа снята с публикации", async (repository) => {
+    await repository.setProgramUnpublished(eventId);
   });
 }
 
 export async function setManualCurrentAction(formData: FormData): Promise<never> {
   const eventId = value(formData, "eventId");
   const sessionId = value(formData, "sessionId");
-  return runOrganizerAction(eventId, "Текущая сессия выбрана вручную", (_, actorId) => {
-    getRepository().setManualCurrentSession(
+  return runOrganizerAction(eventId, "Текущая сессия выбрана вручную", async (repository, _, actorId) => {
+    await repository.setManualCurrentSession(
       eventId,
       sessionId,
       actorId,
@@ -174,7 +179,7 @@ export async function setManualCurrentAction(formData: FormData): Promise<never>
 
 export async function clearManualCurrentAction(formData: FormData): Promise<never> {
   const eventId = value(formData, "eventId");
-  return runOrganizerAction(eventId, "Ручной выбор снят — действует расписание", () => {
-    getRepository().clearManualCurrentSession(eventId);
+  return runOrganizerAction(eventId, "Ручной выбор снят — действует расписание", async (repository) => {
+    await repository.clearManualCurrentSession(eventId);
   });
 }

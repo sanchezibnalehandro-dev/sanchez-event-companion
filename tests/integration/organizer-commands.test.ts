@@ -25,7 +25,7 @@ const addedSession: Session = {
 };
 
 describe("organizer program commands", () => {
-  it("rejects a same-lane move into a non-rippled session without changing program state", () => {
+  it("rejects a same-lane move into a non-rippled session without changing program state", async () => {
     const sessionA: Session = {
       ...opening,
       startsAt: "2026-10-02T10:00:00.000Z",
@@ -45,7 +45,7 @@ describe("organizer program commands", () => {
     const initialProgram = makeProgram({ sessions: [sessionA, sessionB, sessionC] });
     const repository = createTestRepository(initialProgram);
 
-    expect(() =>
+    await expect(
       repository.updateSession({
         session: {
           ...sessionB,
@@ -55,9 +55,9 @@ describe("organizer program commands", () => {
         speakerIds: [speakerOne.id],
         autoShiftFollowing: true,
       }),
-    ).toThrow("session time is already occupied in this location");
+    ).rejects.toThrow("session time is already occupied in this location");
 
-    const after = repository.getOrganizerProgram(event.id);
+    const after = await repository.getOrganizerProgram(event.id);
     expect(after?.sessions).toEqual(initialProgram.sessions);
     expect(after?.sessionSpeakers).toEqual(initialProgram.sessionSpeakers);
     expect(after?.runtime).toEqual(initialProgram.runtime);
@@ -65,7 +65,7 @@ describe("organizer program commands", () => {
     repository.close();
   });
 
-  it("allows a back-to-back same-lane edit and shifts downstream by the end delta", () => {
+  it("allows a back-to-back same-lane edit and shifts downstream by the end delta", async () => {
     const sessionA: Session = {
       ...opening,
       startsAt: "2026-10-02T10:00:00.000Z",
@@ -86,13 +86,13 @@ describe("organizer program commands", () => {
       makeProgram({ sessions: [sessionA, sessionB, sessionC] }),
     );
 
-    repository.updateSession({
+    await repository.updateSession({
       session: { ...sessionB, endsAt: "2026-10-02T12:30:00.000Z" },
       speakerIds: [speakerOne.id, speakerTwo.id],
       autoShiftFollowing: true,
     });
 
-    const sessions = repository.getOrganizerProgram(event.id)?.sessions ?? [];
+    const sessions = (await repository.getOrganizerProgram(event.id))?.sessions ?? [];
     expect(sessions.find((session) => session.id === sessionA.id)).toMatchObject({
       startsAt: "2026-10-02T10:00:00.000Z",
       endsAt: "2026-10-02T11:00:00.000Z",
@@ -108,7 +108,7 @@ describe("organizer program commands", () => {
     repository.close();
   });
 
-  it("shifts only following sessions in the same location and preserves their gaps", () => {
+  it("shifts only following sessions in the same location and preserves their gaps", async () => {
     const hallTwo = {
       id: "location-hall-two",
       eventId: event.id,
@@ -129,13 +129,13 @@ describe("organizer program commands", () => {
       }),
     );
 
-    repository.updateSession({
+    await repository.updateSession({
       session: { ...opening, endsAt: "2026-10-02T08:15:00.000Z" },
       speakerIds: [],
       autoShiftFollowing: true,
     });
 
-    const updated = repository.getOrganizerProgram(event.id);
+    const updated = await repository.getOrganizerProgram(event.id);
     expect(updated?.sessions.find((session) => session.id === opening.id)?.endsAt).toBe(
       "2026-10-02T08:15:00.000Z",
     );
@@ -152,17 +152,17 @@ describe("organizer program commands", () => {
     repository.close();
   });
 
-  it("updates only the edited session when auto-shift is disabled", () => {
+  it("updates only the edited session when auto-shift is disabled", async () => {
     const program = makeProgram();
     const repository = createTestRepository(program);
 
-    repository.updateSession({
+    await repository.updateSession({
       session: { ...opening, endsAt: "2026-10-02T08:15:00.000Z" },
       speakerIds: [],
       autoShiftFollowing: false,
     });
 
-    const updated = repository.getOrganizerProgram(event.id);
+    const updated = await repository.getOrganizerProgram(event.id);
     expect(updated?.sessions.find((session) => session.id === panel.id)).toMatchObject({
       startsAt: panel.startsAt,
       endsAt: panel.endsAt,
@@ -172,7 +172,7 @@ describe("organizer program commands", () => {
     repository.close();
   });
 
-  it("cuts a moved session from its old lane and minimally ripples its destination lane", () => {
+  it("cuts a moved session from its old lane and minimally ripples its destination lane", async () => {
     const hallTwo = {
       id: "location-hall-two",
       eventId: event.id,
@@ -204,7 +204,7 @@ describe("organizer program commands", () => {
       }),
     );
 
-    repository.updateSession({
+    await repository.updateSession({
       session: {
         ...opening,
         startsAt: "2026-10-02T08:30:00.000Z",
@@ -215,7 +215,7 @@ describe("organizer program commands", () => {
       autoShiftFollowing: true,
     });
 
-    const sessions = repository.getOrganizerProgram(event.id)?.sessions ?? [];
+    const sessions = (await repository.getOrganizerProgram(event.id))?.sessions ?? [];
     expect(sessions.find((session) => session.id === panel.id)).toMatchObject({
       startsAt: "2026-10-02T07:15:00.000Z",
       endsAt: "2026-10-02T08:30:00.000Z",
@@ -231,7 +231,7 @@ describe("organizer program commands", () => {
     repository.close();
   });
 
-  it("does not ripple a destination lane when the moved session fits its gap", () => {
+  it("does not ripple a destination lane when the moved session fits its gap", async () => {
     const hallTwo = {
       id: "location-hall-two",
       eventId: event.id,
@@ -253,7 +253,7 @@ describe("organizer program commands", () => {
       }),
     );
 
-    repository.updateSession({
+    await repository.updateSession({
       session: {
         ...opening,
         startsAt: "2026-10-02T08:30:00.000Z",
@@ -265,14 +265,14 @@ describe("organizer program commands", () => {
     });
 
     expect(
-      repository
-        .getOrganizerProgram(event.id)
+      (await repository
+        .getOrganizerProgram(event.id))
         ?.sessions.find((session) => session.id === destinationNext.id),
     ).toMatchObject({ startsAt: destinationNext.startsAt, endsAt: destinationNext.endsAt });
     repository.close();
   });
 
-  it("rejects a move into an occupied destination interval without changing either lane", () => {
+  it("rejects a move into an occupied destination interval without changing either lane", async () => {
     const hallTwo = {
       id: "location-hall-two",
       eventId: event.id,
@@ -293,7 +293,7 @@ describe("organizer program commands", () => {
     });
     const repository = createTestRepository(initialProgram);
 
-    expect(() =>
+    await expect(
       repository.updateSession({
         session: {
           ...opening,
@@ -304,25 +304,29 @@ describe("organizer program commands", () => {
         speakerIds: [],
         autoShiftFollowing: true,
       }),
-    ).toThrow("destination time is already occupied");
+    ).rejects.toThrow("destination time is already occupied");
 
-    expect(repository.getOrganizerProgram(event.id)?.sessions).toEqual(initialProgram.sessions);
+    expect((await repository.getOrganizerProgram(event.id))?.sessions).toEqual(
+      initialProgram.sessions,
+    );
     repository.close();
   });
 
-  it("treats sessions without a location as one auto-shift lane", () => {
+  it("treats sessions without a location as one auto-shift lane", async () => {
     const first = { ...opening, locationId: null };
     const following = { ...panel, locationId: null };
     const repository = createTestRepository(makeProgram({ sessions: [first, following] }));
 
-    repository.updateSession({
+    await repository.updateSession({
       session: { ...first, endsAt: "2026-10-02T08:15:00.000Z" },
       speakerIds: [],
       autoShiftFollowing: true,
     });
 
     expect(
-      repository.getOrganizerProgram(event.id)?.sessions.find((session) => session.id === panel.id),
+      (await repository.getOrganizerProgram(event.id))?.sessions.find(
+        (session) => session.id === panel.id,
+      ),
     ).toMatchObject({
       startsAt: "2026-10-02T08:30:00.000Z",
       endsAt: "2026-10-02T09:45:00.000Z",
@@ -330,36 +334,36 @@ describe("organizer program commands", () => {
     repository.close();
   });
 
-  it("creates, edits and deletes a session", () => {
+  it("creates, edits and deletes a session", async () => {
     const repository = createTestRepository(makeProgram());
 
-    repository.createSession({ session: addedSession, speakerIds: [speakerOne.id] });
-    expect(repository.getOrganizerProgram(event.id)?.sessions).toHaveLength(3);
+    await repository.createSession({ session: addedSession, speakerIds: [speakerOne.id] });
+    expect((await repository.getOrganizerProgram(event.id))?.sessions).toHaveLength(3);
 
-    repository.updateSession({
+    await repository.updateSession({
       session: { ...addedSession, title: "Обновлённая сессия" },
       speakerIds: [speakerOne.id],
       autoShiftFollowing: false,
     });
     expect(
-      repository
-        .getOrganizerProgram(event.id)
+      (await repository
+        .getOrganizerProgram(event.id))
         ?.sessions.find((session) => session.id === addedSession.id)?.title,
     ).toBe("Обновлённая сессия");
 
-    repository.deleteSession(event.id, addedSession.id);
-    expect(repository.getOrganizerProgram(event.id)?.sessions).toHaveLength(2);
+    await repository.deleteSession(event.id, addedSession.id);
+    expect((await repository.getOrganizerProgram(event.id))?.sessions).toHaveLength(2);
     repository.close();
   });
 
-  it("assigns multiple speakers through the organizer command", () => {
+  it("assigns multiple speakers through the organizer command", async () => {
     const repository = createTestRepository(makeProgram());
-    repository.createSession({
+    await repository.createSession({
       session: addedSession,
       speakerIds: [speakerOne.id, speakerTwo.id],
     });
 
-    const program = repository.getOrganizerProgram(event.id);
+    const program = await repository.getOrganizerProgram(event.id);
     expect(
       program?.sessionSpeakers.filter((link) => link.sessionId === addedSession.id),
     ).toEqual([
@@ -369,7 +373,7 @@ describe("organizer program commands", () => {
     repository.close();
   });
 
-  it("preserves retained speaker roles when ordinary session fields change", () => {
+  it("preserves retained speaker roles when ordinary session fields change", async () => {
     const roleLinks = [
       { sessionId: panel.id, speakerId: speakerOne.id, sortOrder: 0, sessionRole: "Moderator" },
       {
@@ -381,7 +385,7 @@ describe("organizer program commands", () => {
     ];
     const repository = createTestRepository(makeProgram({ sessionSpeakers: roleLinks }));
 
-    repository.updateSession({
+    await repository.updateSession({
       session: {
         ...panel,
         title: "Updated panel",
@@ -393,7 +397,7 @@ describe("organizer program commands", () => {
       autoShiftFollowing: false,
     });
 
-    const updated = repository.getOrganizerProgram(event.id);
+    const updated = await repository.getOrganizerProgram(event.id);
     expect(updated?.sessions.find((session) => session.id === panel.id)).toMatchObject({
       title: "Updated panel",
       startsAt: "2026-10-02T08:30:00.000Z",
@@ -406,53 +410,55 @@ describe("organizer program commands", () => {
     repository.close();
   });
 
-  it("persists reorder atomically and rejects partial sets", () => {
+  it("persists reorder atomically and rejects partial sets", async () => {
     const repository = createTestRepository(makeProgram());
-    repository.reorderSessions(event.id, [panel.id, opening.id]);
-    expect(repository.getOrganizerProgram(event.id)?.sessions.map((session) => session.id)).toEqual([
-      panel.id,
-      opening.id,
-    ]);
+    await repository.reorderSessions(event.id, [panel.id, opening.id]);
+    expect(
+      (await repository.getOrganizerProgram(event.id))?.sessions.map((session) => session.id),
+    ).toEqual([panel.id, opening.id]);
 
-    expect(() => repository.reorderSessions(event.id, [opening.id])).toThrow(
+    await expect(repository.reorderSessions(event.id, [opening.id])).rejects.toThrow(
       "every event session exactly once",
     );
-    expect(repository.getOrganizerProgram(event.id)?.sessions.map((session) => session.id)).toEqual([
-      panel.id,
-      opening.id,
-    ]);
+    expect(
+      (await repository.getOrganizerProgram(event.id))?.sessions.map((session) => session.id),
+    ).toEqual([panel.id, opening.id]);
     repository.close();
   });
 
-  it("publishes and unpublishes through the server persistence boundary", () => {
+  it("publishes and unpublishes through the server persistence boundary", async () => {
     const repository = createTestRepository(
       makeProgram({ event: { ...event, programState: "draft", publishedAt: null } }),
     );
-    expect(repository.getPublicProgramBySlug(event.slug)).toEqual({ status: "not_found" });
+    await expect(repository.getPublicProgramBySlug(event.slug)).resolves.toEqual({
+      status: "not_found",
+    });
 
-    repository.setProgramPublished(event.id, "2026-10-02T06:30:00.000Z");
-    expect(repository.getPublicProgramBySlug(event.slug).status).toBe("published");
+    await repository.setProgramPublished(event.id, "2026-10-02T06:30:00.000Z");
+    expect((await repository.getPublicProgramBySlug(event.slug)).status).toBe("published");
 
-    repository.setProgramUnpublished(event.id);
-    expect(repository.getPublicProgramBySlug(event.slug)).toEqual({ status: "unavailable" });
+    await repository.setProgramUnpublished(event.id);
+    await expect(repository.getPublicProgramBySlug(event.slug)).resolves.toEqual({
+      status: "unavailable",
+    });
     repository.close();
   });
 
-  it("sets and clears a manual current session", () => {
+  it("sets and clears a manual current session", async () => {
     const repository = createTestRepository(makeProgram());
-    repository.setManualCurrentSession(
+    await repository.setManualCurrentSession(
       event.id,
       panel.id,
       "organizer-1",
       "2026-10-02T07:30:00.000Z",
     );
-    expect(repository.getOrganizerProgram(event.id)?.runtime).toMatchObject({
+    expect((await repository.getOrganizerProgram(event.id))?.runtime).toMatchObject({
       manualCurrentSessionId: panel.id,
       overrideSetBy: "organizer-1",
     });
 
-    repository.clearManualCurrentSession(event.id);
-    expect(repository.getOrganizerProgram(event.id)?.runtime).toEqual({
+    await repository.clearManualCurrentSession(event.id);
+    expect((await repository.getOrganizerProgram(event.id))?.runtime).toEqual({
       eventId: event.id,
       manualCurrentSessionId: null,
       overrideSetAt: null,
