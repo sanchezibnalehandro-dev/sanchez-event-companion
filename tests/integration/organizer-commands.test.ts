@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Session } from "@/lib/domain/types";
 import {
   event,
+  location,
   makeProgram,
   opening,
   panel,
@@ -24,6 +25,311 @@ const addedSession: Session = {
 };
 
 describe("organizer program commands", () => {
+  it("rejects a same-lane move into a non-rippled session without changing program state", () => {
+    const sessionA: Session = {
+      ...opening,
+      startsAt: "2026-10-02T10:00:00.000Z",
+      endsAt: "2026-10-02T11:00:00.000Z",
+    };
+    const sessionB: Session = {
+      ...panel,
+      startsAt: "2026-10-02T11:00:00.000Z",
+      endsAt: "2026-10-02T12:00:00.000Z",
+    };
+    const sessionC: Session = {
+      ...addedSession,
+      startsAt: "2026-10-02T12:00:00.000Z",
+      endsAt: "2026-10-02T13:00:00.000Z",
+      locationId: location.id,
+    };
+    const initialProgram = makeProgram({ sessions: [sessionA, sessionB, sessionC] });
+    const repository = createTestRepository(initialProgram);
+
+    expect(() =>
+      repository.updateSession({
+        session: {
+          ...sessionB,
+          startsAt: "2026-10-02T10:30:00.000Z",
+          endsAt: "2026-10-02T11:30:00.000Z",
+        },
+        speakerIds: [speakerOne.id],
+        autoShiftFollowing: true,
+      }),
+    ).toThrow("session time is already occupied in this location");
+
+    const after = repository.getOrganizerProgram(event.id);
+    expect(after?.sessions).toEqual(initialProgram.sessions);
+    expect(after?.sessionSpeakers).toEqual(initialProgram.sessionSpeakers);
+    expect(after?.runtime).toEqual(initialProgram.runtime);
+    expect(after?.liveSessionMappings).toEqual(initialProgram.liveSessionMappings);
+    repository.close();
+  });
+
+  it("allows a back-to-back same-lane edit and shifts downstream by the end delta", () => {
+    const sessionA: Session = {
+      ...opening,
+      startsAt: "2026-10-02T10:00:00.000Z",
+      endsAt: "2026-10-02T11:00:00.000Z",
+    };
+    const sessionB: Session = {
+      ...panel,
+      startsAt: "2026-10-02T11:00:00.000Z",
+      endsAt: "2026-10-02T12:00:00.000Z",
+    };
+    const sessionC: Session = {
+      ...addedSession,
+      startsAt: "2026-10-02T12:00:00.000Z",
+      endsAt: "2026-10-02T13:00:00.000Z",
+      locationId: location.id,
+    };
+    const repository = createTestRepository(
+      makeProgram({ sessions: [sessionA, sessionB, sessionC] }),
+    );
+
+    repository.updateSession({
+      session: { ...sessionB, endsAt: "2026-10-02T12:30:00.000Z" },
+      speakerIds: [speakerOne.id, speakerTwo.id],
+      autoShiftFollowing: true,
+    });
+
+    const sessions = repository.getOrganizerProgram(event.id)?.sessions ?? [];
+    expect(sessions.find((session) => session.id === sessionA.id)).toMatchObject({
+      startsAt: "2026-10-02T10:00:00.000Z",
+      endsAt: "2026-10-02T11:00:00.000Z",
+    });
+    expect(sessions.find((session) => session.id === sessionB.id)).toMatchObject({
+      startsAt: "2026-10-02T11:00:00.000Z",
+      endsAt: "2026-10-02T12:30:00.000Z",
+    });
+    expect(sessions.find((session) => session.id === sessionC.id)).toMatchObject({
+      startsAt: "2026-10-02T12:30:00.000Z",
+      endsAt: "2026-10-02T13:30:00.000Z",
+    });
+    repository.close();
+  });
+
+  it("shifts only following sessions in the same location and preserves their gaps", () => {
+    const hallTwo = {
+      id: "location-hall-two",
+      eventId: event.id,
+      name: "Hall 2",
+      sortOrder: 1,
+    };
+    const parallelSession: Session = {
+      ...panel,
+      id: "session-hall-two",
+      slug: "hall-two-session",
+      title: "Hall 2 session",
+      locationId: hallTwo.id,
+    };
+    const repository = createTestRepository(
+      makeProgram({
+        locations: [location, hallTwo],
+        sessions: [opening, panel, parallelSession],
+      }),
+    );
+
+    repository.updateSession({
+      session: { ...opening, endsAt: "2026-10-02T08:15:00.000Z" },
+      speakerIds: [],
+      autoShiftFollowing: true,
+    });
+
+    const updated = repository.getOrganizerProgram(event.id);
+    expect(updated?.sessions.find((session) => session.id === opening.id)?.endsAt).toBe(
+      "2026-10-02T08:15:00.000Z",
+    );
+    expect(updated?.sessions.find((session) => session.id === panel.id)).toMatchObject({
+      startsAt: "2026-10-02T08:30:00.000Z",
+      endsAt: "2026-10-02T09:45:00.000Z",
+    });
+    expect(updated?.sessions.find((session) => session.id === parallelSession.id)).toMatchObject({
+      startsAt: parallelSession.startsAt,
+      endsAt: parallelSession.endsAt,
+    });
+    expect(updated?.runtime).toEqual(makeProgram().runtime);
+    expect(updated?.liveSessionMappings).toEqual(makeProgram().liveSessionMappings);
+    repository.close();
+  });
+
+  it("updates only the edited session when auto-shift is disabled", () => {
+    const program = makeProgram();
+    const repository = createTestRepository(program);
+
+    repository.updateSession({
+      session: { ...opening, endsAt: "2026-10-02T08:15:00.000Z" },
+      speakerIds: [],
+      autoShiftFollowing: false,
+    });
+
+    const updated = repository.getOrganizerProgram(event.id);
+    expect(updated?.sessions.find((session) => session.id === panel.id)).toMatchObject({
+      startsAt: panel.startsAt,
+      endsAt: panel.endsAt,
+    });
+    expect(updated?.runtime).toEqual(program.runtime);
+    expect(updated?.liveSessionMappings).toEqual(program.liveSessionMappings);
+    repository.close();
+  });
+
+  it("cuts a moved session from its old lane and minimally ripples its destination lane", () => {
+    const hallTwo = {
+      id: "location-hall-two",
+      eventId: event.id,
+      name: "Hall 2",
+      sortOrder: 1,
+    };
+    const destinationNext: Session = {
+      ...panel,
+      id: "session-hall-two-next",
+      slug: "hall-two-next",
+      title: "Hall 2 next",
+      startsAt: "2026-10-02T08:45:00.000Z",
+      endsAt: "2026-10-02T09:45:00.000Z",
+      locationId: hallTwo.id,
+    };
+    const destinationLater: Session = {
+      ...destinationNext,
+      id: "session-hall-two-later",
+      slug: "hall-two-later",
+      title: "Hall 2 later",
+      startsAt: "2026-10-02T10:00:00.000Z",
+      endsAt: "2026-10-02T11:00:00.000Z",
+      sortOrder: 3,
+    };
+    const repository = createTestRepository(
+      makeProgram({
+        locations: [location, hallTwo],
+        sessions: [opening, panel, destinationNext, destinationLater],
+      }),
+    );
+
+    repository.updateSession({
+      session: {
+        ...opening,
+        startsAt: "2026-10-02T08:30:00.000Z",
+        endsAt: "2026-10-02T09:00:00.000Z",
+        locationId: hallTwo.id,
+      },
+      speakerIds: [],
+      autoShiftFollowing: true,
+    });
+
+    const sessions = repository.getOrganizerProgram(event.id)?.sessions ?? [];
+    expect(sessions.find((session) => session.id === panel.id)).toMatchObject({
+      startsAt: "2026-10-02T07:15:00.000Z",
+      endsAt: "2026-10-02T08:30:00.000Z",
+    });
+    expect(sessions.find((session) => session.id === destinationNext.id)).toMatchObject({
+      startsAt: "2026-10-02T09:00:00.000Z",
+      endsAt: "2026-10-02T10:00:00.000Z",
+    });
+    expect(sessions.find((session) => session.id === destinationLater.id)).toMatchObject({
+      startsAt: "2026-10-02T10:15:00.000Z",
+      endsAt: "2026-10-02T11:15:00.000Z",
+    });
+    repository.close();
+  });
+
+  it("does not ripple a destination lane when the moved session fits its gap", () => {
+    const hallTwo = {
+      id: "location-hall-two",
+      eventId: event.id,
+      name: "Hall 2",
+      sortOrder: 1,
+    };
+    const destinationNext: Session = {
+      ...panel,
+      id: "session-hall-two-next",
+      slug: "hall-two-next",
+      startsAt: "2026-10-02T09:15:00.000Z",
+      endsAt: "2026-10-02T10:15:00.000Z",
+      locationId: hallTwo.id,
+    };
+    const repository = createTestRepository(
+      makeProgram({
+        locations: [location, hallTwo],
+        sessions: [opening, panel, destinationNext],
+      }),
+    );
+
+    repository.updateSession({
+      session: {
+        ...opening,
+        startsAt: "2026-10-02T08:30:00.000Z",
+        endsAt: "2026-10-02T09:00:00.000Z",
+        locationId: hallTwo.id,
+      },
+      speakerIds: [],
+      autoShiftFollowing: true,
+    });
+
+    expect(
+      repository
+        .getOrganizerProgram(event.id)
+        ?.sessions.find((session) => session.id === destinationNext.id),
+    ).toMatchObject({ startsAt: destinationNext.startsAt, endsAt: destinationNext.endsAt });
+    repository.close();
+  });
+
+  it("rejects a move into an occupied destination interval without changing either lane", () => {
+    const hallTwo = {
+      id: "location-hall-two",
+      eventId: event.id,
+      name: "Hall 2",
+      sortOrder: 1,
+    };
+    const occupied: Session = {
+      ...panel,
+      id: "session-hall-two-occupied",
+      slug: "hall-two-occupied",
+      startsAt: "2026-10-02T10:00:00.000Z",
+      endsAt: "2026-10-02T11:00:00.000Z",
+      locationId: hallTwo.id,
+    };
+    const initialProgram = makeProgram({
+      locations: [location, hallTwo],
+      sessions: [opening, panel, occupied],
+    });
+    const repository = createTestRepository(initialProgram);
+
+    expect(() =>
+      repository.updateSession({
+        session: {
+          ...opening,
+          startsAt: "2026-10-02T10:30:00.000Z",
+          endsAt: "2026-10-02T11:15:00.000Z",
+          locationId: hallTwo.id,
+        },
+        speakerIds: [],
+        autoShiftFollowing: true,
+      }),
+    ).toThrow("destination time is already occupied");
+
+    expect(repository.getOrganizerProgram(event.id)?.sessions).toEqual(initialProgram.sessions);
+    repository.close();
+  });
+
+  it("treats sessions without a location as one auto-shift lane", () => {
+    const first = { ...opening, locationId: null };
+    const following = { ...panel, locationId: null };
+    const repository = createTestRepository(makeProgram({ sessions: [first, following] }));
+
+    repository.updateSession({
+      session: { ...first, endsAt: "2026-10-02T08:15:00.000Z" },
+      speakerIds: [],
+      autoShiftFollowing: true,
+    });
+
+    expect(
+      repository.getOrganizerProgram(event.id)?.sessions.find((session) => session.id === panel.id),
+    ).toMatchObject({
+      startsAt: "2026-10-02T08:30:00.000Z",
+      endsAt: "2026-10-02T09:45:00.000Z",
+    });
+    repository.close();
+  });
+
   it("creates, edits and deletes a session", () => {
     const repository = createTestRepository(makeProgram());
 
@@ -33,6 +339,7 @@ describe("organizer program commands", () => {
     repository.updateSession({
       session: { ...addedSession, title: "Обновлённая сессия" },
       speakerIds: [speakerOne.id],
+      autoShiftFollowing: false,
     });
     expect(
       repository
@@ -83,6 +390,7 @@ describe("organizer program commands", () => {
         locationId: null,
       },
       speakerIds: [speakerOne.id, speakerTwo.id],
+      autoShiftFollowing: false,
     });
 
     const updated = repository.getOrganizerProgram(event.id);

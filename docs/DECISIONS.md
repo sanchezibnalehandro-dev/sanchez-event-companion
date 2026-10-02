@@ -108,3 +108,20 @@ Production organizer authentication remains explicitly deferred.
 `npm run demo:seed` inserts one known fictional event into the configured local
 SQLite file and refuses to overwrite an event with the same ID. Its LIVE mappings
 exercise URL generation only; they do not claim or require a real Q&A event.
+
+## Phase 3 implementation decisions
+
+### Auto-shift is a bounded repository operation
+
+Auto-shift keeps explicit timestamps and runs with the edited session and speaker
+links in one SQLite transaction. Same-location edits ripple by the edited end delta.
+Moving between locations compresses the source lane, then applies only the overlap
+required by the first following destination session. A destination start inside an
+occupied interval is rejected atomically. Fixed anchors and a universal scheduling
+engine remain deferred.
+
+### Parallel presentation does not redefine NOW
+
+Strictly overlapping intervals form a shared visual range with one lane per location.
+Back-to-back intervals stay separate. The effective-current resolver is unchanged:
+one session remains primary and active alternatives are presented as concurrent.

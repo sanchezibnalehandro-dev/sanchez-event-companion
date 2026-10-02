@@ -76,6 +76,20 @@ correct future NEXT.
 
 Q&A current room and `questions_open` are intentionally absent from this resolver.
 
+## Location-aware program flow
+
+Sessions retain explicit absolute `starts_at` and `ends_at` values. An organizer edit
+may transactionally ripple later sessions in the same location lane; sessions with a
+null location form their own lane. A move between locations removes the old duration
+from its source lane and resolves only the minimum overlap with the first following
+destination session. A start inside an existing destination interval is rejected
+before any write rather than turning the repository into a general scheduling engine.
+
+The public program derives connected overlap groups from the explicit intervals.
+Each group is presented as one time context with location lanes, while effective NOW
+still resolves to exactly one primary session and other active sessions stay visible
+as concurrent.
+
 ## Publication boundary
 
 The public repository first reads only `id` and `program_state`:

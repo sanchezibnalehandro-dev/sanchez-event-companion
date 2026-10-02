@@ -14,3 +14,7 @@ export interface SessionWrite {
   session: Session;
   speakerIds: string[];
 }
+
+export interface SessionUpdate extends SessionWrite {
+  autoShiftFollowing: boolean;
+}

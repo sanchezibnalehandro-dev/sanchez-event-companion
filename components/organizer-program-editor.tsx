@@ -123,6 +123,15 @@ function SessionForm({
           ))}
         </select>
       </label>
+      {session ? (
+        <label className="auto-shift-option">
+          <input type="checkbox" name="autoShiftFollowing" defaultChecked />
+          <span>
+            <strong>Сдвинуть последующие сессии в этом зале</strong>
+            <small>Сохраняет интервалы между следующими сессиями.</small>
+          </span>
+        </label>
+      ) : null}
       <label>
         Краткое описание
         <textarea name="summary" maxLength={1200} rows={4} defaultValue={session?.summary} />
