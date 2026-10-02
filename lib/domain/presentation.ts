@@ -1,12 +1,17 @@
 import type { ProgramAggregate, Session, Speaker } from "@/lib/domain/types";
+import {
+  assertCurrentProductTimezone,
+  CURRENT_PRODUCT_TIMEZONE,
+} from "@/lib/domain/validation";
 
 export function formatEventTime(
   instant: string,
   timezone: string,
   options: Intl.DateTimeFormatOptions = {},
 ): string {
+  assertCurrentProductTimezone(timezone);
   return new Intl.DateTimeFormat("ru-RU", {
-    timeZone: timezone,
+    timeZone: CURRENT_PRODUCT_TIMEZONE,
     hour: "2-digit",
     minute: "2-digit",
     ...options,
@@ -14,8 +19,9 @@ export function formatEventTime(
 }
 
 export function formatEventDate(instant: string, timezone: string): string {
+  assertCurrentProductTimezone(timezone);
   return new Intl.DateTimeFormat("ru-RU", {
-    timeZone: timezone,
+    timeZone: CURRENT_PRODUCT_TIMEZONE,
     weekday: "long",
     day: "numeric",
     month: "long",
@@ -23,9 +29,10 @@ export function formatEventDate(instant: string, timezone: string): string {
 }
 
 function dateTimeParts(instant: Date, timezone: string): Record<string, string> {
+  assertCurrentProductTimezone(timezone);
   return Object.fromEntries(
     new Intl.DateTimeFormat("en-CA", {
-      timeZone: timezone,
+      timeZone: CURRENT_PRODUCT_TIMEZONE,
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -46,6 +53,7 @@ export function formatDateTimeLocal(instant: string, timezone: string): string {
 }
 
 export function eventLocalDateTimeToInstant(value: string, timezone: string): string {
+  assertCurrentProductTimezone(timezone);
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
   if (!match) throw new Error("Date and time must use YYYY-MM-DDTHH:mm");
 
@@ -56,28 +64,16 @@ export function eventLocalDateTimeToInstant(value: string, timezone: string): st
     hour: Number(match[4]),
     minute: Number(match[5]),
   };
-  const desiredEpoch = Date.UTC(
-    desired.year,
-    desired.month - 1,
-    desired.day,
-    desired.hour,
-    desired.minute,
+  const candidate = new Date(
+    Date.UTC(
+      desired.year,
+      desired.month - 1,
+      desired.day,
+      desired.hour - 3,
+      desired.minute,
+    ),
   );
-  let candidate = desiredEpoch;
-
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const actual = dateTimeParts(new Date(candidate), timezone);
-    const actualAsUtc = Date.UTC(
-      Number(actual.year),
-      Number(actual.month) - 1,
-      Number(actual.day),
-      Number(actual.hour),
-      Number(actual.minute),
-    );
-    candidate += desiredEpoch - actualAsUtc;
-  }
-
-  const verified = dateTimeParts(new Date(candidate), timezone);
+  const verified = dateTimeParts(candidate, CURRENT_PRODUCT_TIMEZONE);
   if (
     Number(verified.year) !== desired.year ||
     Number(verified.month) !== desired.month ||
@@ -85,10 +81,10 @@ export function eventLocalDateTimeToInstant(value: string, timezone: string): st
     Number(verified.hour) !== desired.hour ||
     Number(verified.minute) !== desired.minute
   ) {
-    throw new Error(`Local time does not exist in ${timezone}`);
+    throw new Error(`Invalid Europe/Moscow local date and time: ${value}`);
   }
 
-  return new Date(candidate).toISOString();
+  return candidate.toISOString();
 }
 
 export function getSessionSpeakers(

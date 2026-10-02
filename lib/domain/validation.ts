@@ -9,6 +9,7 @@ import type {
 const SLUG_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const PROVIDER_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const OFFSET_TIMESTAMP_PATTERN = /(?:Z|[+-]\d{2}:\d{2})$/;
+export const CURRENT_PRODUCT_TIMEZONE = "Europe/Moscow";
 
 export function toEpochMilliseconds(value: string): number {
   if (!OFFSET_TIMESTAMP_PATTERN.test(value)) {
@@ -27,12 +28,11 @@ export function normalizeInstant(value: string): string {
   return new Date(toEpochMilliseconds(value)).toISOString();
 }
 
-export function isIanaTimeZone(value: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en", { timeZone: value }).format();
-    return value.includes("/") || value === "UTC";
-  } catch {
-    return false;
+export function assertCurrentProductTimezone(value: string): void {
+  if (value !== CURRENT_PRODUCT_TIMEZONE) {
+    throw new Error(
+      `Unsupported event timezone: ${value}. Current product time contract: Europe/Moscow.`,
+    );
   }
 }
 
@@ -43,9 +43,7 @@ export function validateEvent(event: CompanionEvent): void {
   if (!event.title.trim()) {
     throw new Error("Event title is required");
   }
-  if (!isIanaTimeZone(event.timezone)) {
-    throw new Error(`Invalid IANA timezone: ${event.timezone}`);
-  }
+  assertCurrentProductTimezone(event.timezone);
   if (toEpochMilliseconds(event.endsAt) <= toEpochMilliseconds(event.startsAt)) {
     throw new Error("Event endsAt must be later than startsAt");
   }

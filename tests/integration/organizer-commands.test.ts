@@ -62,6 +62,42 @@ describe("organizer program commands", () => {
     repository.close();
   });
 
+  it("preserves retained speaker roles when ordinary session fields change", () => {
+    const roleLinks = [
+      { sessionId: panel.id, speakerId: speakerOne.id, sortOrder: 0, sessionRole: "Moderator" },
+      {
+        sessionId: panel.id,
+        speakerId: speakerTwo.id,
+        sortOrder: 1,
+        sessionRole: "Panel participant",
+      },
+    ];
+    const repository = createTestRepository(makeProgram({ sessionSpeakers: roleLinks }));
+
+    repository.updateSession({
+      session: {
+        ...panel,
+        title: "Updated panel",
+        startsAt: "2026-10-02T08:30:00.000Z",
+        endsAt: "2026-10-02T09:45:00.000Z",
+        locationId: null,
+      },
+      speakerIds: [speakerOne.id, speakerTwo.id],
+    });
+
+    const updated = repository.getOrganizerProgram(event.id);
+    expect(updated?.sessions.find((session) => session.id === panel.id)).toMatchObject({
+      title: "Updated panel",
+      startsAt: "2026-10-02T08:30:00.000Z",
+      endsAt: "2026-10-02T09:45:00.000Z",
+      locationId: null,
+    });
+    expect(updated?.sessionSpeakers.filter((link) => link.sessionId === panel.id)).toEqual(
+      roleLinks,
+    );
+    repository.close();
+  });
+
   it("persists reorder atomically and rejects partial sets", () => {
     const repository = createTestRepository(makeProgram());
     repository.reorderSessions(event.id, [panel.id, opening.id]);

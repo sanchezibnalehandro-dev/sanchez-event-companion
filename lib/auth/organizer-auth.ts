@@ -5,17 +5,24 @@ export interface OrganizerActor {
   source: "local-development-bearer" | "local-demo-mode";
 }
 
+export function isLocalDemoMode(options: {
+  environment: string | undefined;
+  localDemoEnabled: boolean;
+}): boolean {
+  return options.environment !== "production" && options.localDemoEnabled;
+}
+
 export function authenticateOrganizer(options: {
   authorizationHeader: string | null;
   configuredToken: string | undefined;
-  isLoopbackRequest: boolean;
+  environment: string | undefined;
   localDemoEnabled: boolean;
 }): OrganizerActor | null {
-  if (!options.isLoopbackRequest) {
+  if (options.environment === "production") {
     return null;
   }
 
-  if (options.localDemoEnabled) {
+  if (isLocalDemoMode(options)) {
     return { id: "local-demo-organizer", source: "local-demo-mode" };
   }
 
@@ -35,8 +42,16 @@ export function authenticateOrganizer(options: {
   return { id: "local-development-organizer", source: "local-development-bearer" };
 }
 
-export function isLoopbackHost(host: string | null): boolean {
-  if (!host) return false;
-  const hostname = host.startsWith("[") ? host.slice(1, host.indexOf("]")) : host.split(":")[0];
-  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+export function authenticateOrganizerRequest(options: {
+  requestHeaders: Pick<Headers, "get">;
+  configuredToken: string | undefined;
+  environment: string | undefined;
+  localDemoEnabled: boolean;
+}): OrganizerActor | null {
+  return authenticateOrganizer({
+    authorizationHeader: options.requestHeaders.get("authorization"),
+    configuredToken: options.configuredToken,
+    environment: options.environment,
+    localDemoEnabled: options.localDemoEnabled,
+  });
 }

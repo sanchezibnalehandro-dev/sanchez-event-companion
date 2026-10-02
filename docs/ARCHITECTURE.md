@@ -41,9 +41,10 @@ The migration enforces:
 - event-local runtime overrides;
 - normalized event-level LIVE integrations plus optional session mappings.
 
-Application validation additionally requires timezone-bearing timestamps and a valid
-IANA event timezone. Instants are normalized to UTC ISO strings before persistence;
-the IANA timezone controls display, not instant comparison.
+Application validation additionally requires timezone-bearing timestamps and rejects
+events outside the current product timezone. Current product time contract: Europe/Moscow.
+Event-local input and display use Moscow time; instants are normalized to UTC ISO
+strings before persistence. The existing timezone column is retained for future evolution.
 
 Reorder accepts every session ID for the event exactly once and writes all positions
 inside one immediate transaction. Session create/update and speaker assignment are
@@ -97,8 +98,9 @@ claim that Q&A is open. A disabled or missing mapping produces no CTA.
 
 ## Authentication boundary
 
-No LIVE Q&A cookie or session is reused. The local placeholder accepts either a
-configured Bearer token or an explicit local-demo switch, and only when the request
-Host is loopback. A deployed/non-loopback request is always denied regardless of
-environment variables. Choosing and integrating production auth requires a separate
-decision and real infrastructure.
+No LIVE Q&A cookie or session is reused. Outside production, the local placeholder
+accepts either a configured Bearer token or an explicit local-demo switch. The demo
+command binds Next.js to `127.0.0.1`; request Host headers are not an authentication
+signal. Production always denies both local mechanisms regardless of environment
+variables. Choosing and integrating production auth requires a separate decision
+and real infrastructure.

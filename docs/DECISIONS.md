@@ -96,10 +96,11 @@ The effective-current invariant still produces one NOW session. A simultaneous
 session is retained in the program timeline with a `concurrent` label instead of
 being hidden or incorrectly marked upcoming.
 
-### Local demo auth is loopback-only
+### Local demo auth uses an explicit loopback-bound launch
 
-The Phase 2 demo switch is usable only through a loopback Host. This keeps local
-acceptance practical without turning the placeholder into a deployable auth scheme.
+The Phase 2 demo command explicitly enables the demo switch and binds the development
+server to `127.0.0.1`. Request Host headers are not trusted as an authentication
+boundary. Production rejects both demo bypass and development Bearer auth.
 Production organizer authentication remains explicitly deferred.
 
 ### Demo data is fictional and non-destructive

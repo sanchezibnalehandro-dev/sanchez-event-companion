@@ -1,7 +1,14 @@
 import { redirect } from "next/navigation";
 
+import { isLocalDemoMode } from "@/lib/auth/organizer-auth";
+
 export default function HomePage() {
-  if (process.env.EVENT_COMPANION_LOCAL_DEMO === "true") {
+  if (
+    isLocalDemoMode({
+      environment: process.env.NODE_ENV,
+      localDemoEnabled: process.env.EVENT_COMPANION_LOCAL_DEMO === "true",
+    })
+  ) {
     redirect("/e/future-industry-day");
   }
 

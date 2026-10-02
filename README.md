@@ -52,12 +52,15 @@ Requires Node.js 24 or newer.
 npm install
 Copy-Item .env.example .env.local
 npm run demo:seed
-npm run dev
+npm run dev:demo
 ```
 
-Set `EVENT_COMPANION_LOCAL_DEMO=true` in `.env.local` to open the organizer editor
-from `localhost` or `127.0.0.1`. The bypass is rejected on non-loopback hosts. Never
-enable it in a deployed environment.
+`npm run dev:demo` explicitly enables `EVENT_COMPANION_LOCAL_DEMO=true` and binds
+the development server to `127.0.0.1`. Production always rejects both the demo
+bypass and the development Bearer token, regardless of environment configuration.
+
+Current product time contract: Europe/Moscow. Event times are entered and displayed
+in Moscow time, while persisted timestamps remain absolute ISO/UTC instants.
 
 The seed is non-destructive: if the demo event already exists, it exits without
 overwriting data.
@@ -80,6 +83,7 @@ npm run typecheck
 npm test
 npm run build
 npm run demo:seed
+npm run dev:demo
 ```
 
 ## Event current-session rule

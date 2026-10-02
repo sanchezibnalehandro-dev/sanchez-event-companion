@@ -491,15 +491,27 @@ export class SqliteCompanionRepository implements CompanionRepository {
       throw new Error("Every assigned speaker must belong to the event");
     }
 
+    const existingLinks = this.database
+      .prepare(
+        `SELECT speaker_id, session_role FROM session_speakers
+         WHERE session_id = ?`,
+      )
+      .all(sessionId) as Row[];
+    const existingRoles = new Map(
+      existingLinks.map((row) => [text(row, "speaker_id"), nullableText(row, "session_role")]),
+    );
+
     this.database
       .prepare("DELETE FROM session_speakers WHERE session_id = ?")
       .run(sessionId);
     const insert = this.database.prepare(
       `INSERT INTO session_speakers (
         session_id, speaker_id, sort_order, session_role
-      ) VALUES (?, ?, ?, NULL)`,
+      ) VALUES (?, ?, ?, ?)`,
     );
-    speakerIds.forEach((speakerId, sortOrder) => insert.run(sessionId, speakerId, sortOrder));
+    speakerIds.forEach((speakerId, sortOrder) =>
+      insert.run(sessionId, speakerId, sortOrder, existingRoles.get(speakerId) ?? null),
+    );
   }
 
   private getProgramByEventId(eventId: string): ProgramAggregate | null {
