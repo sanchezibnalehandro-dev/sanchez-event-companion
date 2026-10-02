@@ -25,6 +25,89 @@ const addedSession: Session = {
 };
 
 describe("organizer program commands", () => {
+  it("rejects a same-lane move into a non-rippled session without changing program state", () => {
+    const sessionA: Session = {
+      ...opening,
+      startsAt: "2026-10-02T10:00:00.000Z",
+      endsAt: "2026-10-02T11:00:00.000Z",
+    };
+    const sessionB: Session = {
+      ...panel,
+      startsAt: "2026-10-02T11:00:00.000Z",
+      endsAt: "2026-10-02T12:00:00.000Z",
+    };
+    const sessionC: Session = {
+      ...addedSession,
+      startsAt: "2026-10-02T12:00:00.000Z",
+      endsAt: "2026-10-02T13:00:00.000Z",
+      locationId: location.id,
+    };
+    const initialProgram = makeProgram({ sessions: [sessionA, sessionB, sessionC] });
+    const repository = createTestRepository(initialProgram);
+
+    expect(() =>
+      repository.updateSession({
+        session: {
+          ...sessionB,
+          startsAt: "2026-10-02T10:30:00.000Z",
+          endsAt: "2026-10-02T11:30:00.000Z",
+        },
+        speakerIds: [speakerOne.id],
+        autoShiftFollowing: true,
+      }),
+    ).toThrow("session time is already occupied in this location");
+
+    const after = repository.getOrganizerProgram(event.id);
+    expect(after?.sessions).toEqual(initialProgram.sessions);
+    expect(after?.sessionSpeakers).toEqual(initialProgram.sessionSpeakers);
+    expect(after?.runtime).toEqual(initialProgram.runtime);
+    expect(after?.liveSessionMappings).toEqual(initialProgram.liveSessionMappings);
+    repository.close();
+  });
+
+  it("allows a back-to-back same-lane edit and shifts downstream by the end delta", () => {
+    const sessionA: Session = {
+      ...opening,
+      startsAt: "2026-10-02T10:00:00.000Z",
+      endsAt: "2026-10-02T11:00:00.000Z",
+    };
+    const sessionB: Session = {
+      ...panel,
+      startsAt: "2026-10-02T11:00:00.000Z",
+      endsAt: "2026-10-02T12:00:00.000Z",
+    };
+    const sessionC: Session = {
+      ...addedSession,
+      startsAt: "2026-10-02T12:00:00.000Z",
+      endsAt: "2026-10-02T13:00:00.000Z",
+      locationId: location.id,
+    };
+    const repository = createTestRepository(
+      makeProgram({ sessions: [sessionA, sessionB, sessionC] }),
+    );
+
+    repository.updateSession({
+      session: { ...sessionB, endsAt: "2026-10-02T12:30:00.000Z" },
+      speakerIds: [speakerOne.id, speakerTwo.id],
+      autoShiftFollowing: true,
+    });
+
+    const sessions = repository.getOrganizerProgram(event.id)?.sessions ?? [];
+    expect(sessions.find((session) => session.id === sessionA.id)).toMatchObject({
+      startsAt: "2026-10-02T10:00:00.000Z",
+      endsAt: "2026-10-02T11:00:00.000Z",
+    });
+    expect(sessions.find((session) => session.id === sessionB.id)).toMatchObject({
+      startsAt: "2026-10-02T11:00:00.000Z",
+      endsAt: "2026-10-02T12:30:00.000Z",
+    });
+    expect(sessions.find((session) => session.id === sessionC.id)).toMatchObject({
+      startsAt: "2026-10-02T12:30:00.000Z",
+      endsAt: "2026-10-02T13:30:00.000Z",
+    });
+    repository.close();
+  });
+
   it("shifts only following sessions in the same location and preserves their gaps", () => {
     const hallTwo = {
       id: "location-hall-two",

@@ -364,8 +364,26 @@ export class SqliteCompanionRepository implements CompanionRepository {
       };
 
       if (write.autoShiftFollowing && locationUnchanged) {
+        const followingRows = laneRows(existingLocationId, oldEnd);
+        const followingIds = new Set(followingRows.map((row) => text(row, "id")));
+        const newStartEpoch = new Date(write.session.startsAt).getTime();
+        const newEndEpoch = new Date(write.session.endsAt).getTime();
+        const conflictsWithNonRippledSession = laneRows(
+          existingLocationId,
+          "0000-01-01T00:00:00.000Z",
+        )
+          .filter((row) => !followingIds.has(text(row, "id")))
+          .some((row) => {
+            const startsAt = new Date(text(row, "starts_at")).getTime();
+            const endsAt = new Date(text(row, "ends_at")).getTime();
+            return startsAt < newEndEpoch && newStartEpoch < endsAt;
+          });
+        if (conflictsWithNonRippledSession) {
+          throw new Error("session time is already occupied in this location");
+        }
+
         const delta = new Date(write.session.endsAt).getTime() - new Date(oldEnd).getTime();
-        shiftRows(laneRows(existingLocationId, oldEnd), delta);
+        shiftRows(followingRows, delta);
       } else if (write.autoShiftFollowing) {
         const destinationRows = laneRows(write.session.locationId, "0000-01-01T00:00:00.000Z");
         const newStartEpoch = new Date(write.session.startsAt).getTime();
