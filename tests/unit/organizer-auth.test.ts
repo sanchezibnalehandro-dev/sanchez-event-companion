@@ -8,18 +8,31 @@ describe("organizer auth boundary", () => {
       authenticateOrganizer({
         authorizationHeader: "Bearer anything",
         configuredToken: undefined,
-        nodeEnv: "development",
+        isLoopbackRequest: true,
+        localDemoEnabled: false,
       }),
     ).toBeNull();
   });
 
-  it("always disables the development placeholder in production", () => {
+  it("always disables the development placeholder away from loopback", () => {
     expect(
       authenticateOrganizer({
         authorizationHeader: "Bearer local-token",
         configuredToken: "local-token",
-        nodeEnv: "production",
+        isLoopbackRequest: false,
+        localDemoEnabled: true,
       }),
     ).toBeNull();
+  });
+
+  it("allows explicitly enabled local demo mode on loopback", () => {
+    expect(
+      authenticateOrganizer({
+        authorizationHeader: null,
+        configuredToken: undefined,
+        isLoopbackRequest: true,
+        localDemoEnabled: true,
+      }),
+    ).toEqual({ id: "local-demo-organizer", source: "local-demo-mode" });
   });
 });

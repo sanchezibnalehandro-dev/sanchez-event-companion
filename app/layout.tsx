@@ -16,7 +16,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <Link className="wordmark" href="/">
             SANCHEZ <span>EVENT COMPANION</span>
           </Link>
-          <span className="phase-chip">PHASE 1</span>
+          <span className="phase-chip">PHASE 2</span>
         </header>
         {children}
       </body>

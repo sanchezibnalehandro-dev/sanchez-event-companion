@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import type { ProgramAggregate, Session } from "@/lib/domain/types";
+import type { SessionTimelineStatus } from "@/lib/domain/program-timeline";
 import {
   formatEventTime,
   getSessionLocation,
@@ -11,18 +12,33 @@ export function SessionCard({
   program,
   session,
   label,
+  status,
+  showSummary = false,
 }: {
   program: ProgramAggregate;
   session: Session;
   label?: string;
+  status?: SessionTimelineStatus;
+  showSummary?: boolean;
 }) {
   const location = getSessionLocation(program, session);
   const speakers = getSessionSpeakers(program, session.id);
 
   return (
-    <article className="session-card">
+    <article className={`session-card${status ? ` session-${status}` : ""}`}>
       <div className="session-time">
         {label ? <span className="session-label">{label}</span> : null}
+        {status ? (
+          <span className={`timeline-status ${status}`}>
+            {status === "current"
+              ? "Сейчас"
+              : status === "concurrent"
+                ? "Идёт параллельно"
+                : status === "past"
+                  ? "Завершено"
+                  : "Далее"}
+          </span>
+        ) : null}
         <time dateTime={session.startsAt}>
           {formatEventTime(session.startsAt, program.event.timezone)}
         </time>
@@ -43,6 +59,7 @@ export function SessionCard({
             {speakers.map(({ speaker }) => speaker.name).join(" · ")}
           </p>
         ) : null}
+        {showSummary && session.summary ? <p className="session-summary">{session.summary}</p> : null}
       </div>
     </article>
   );

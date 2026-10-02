@@ -5,6 +5,7 @@ import { ComingSoonCard } from "@/components/coming-soon-card";
 import { getRepository } from "@/lib/data/database";
 import {
   formatEventTime,
+  formatEventDate,
   getSessionLocation,
   getSessionSpeakers,
 } from "@/lib/domain/presentation";
@@ -39,11 +40,17 @@ export default async function SessionPage({
 
   return (
     <main className="shell narrow-shell">
-      <Link className="back-link" href={`/e/${eventSlug}/program`}>
-        ← К программе
-      </Link>
+      <nav className="detail-nav" aria-label="Навигация по событию">
+        <Link className="back-link" href={`/e/${eventSlug}`}>
+          ← Сегодня
+        </Link>
+        <Link className="back-link" href={`/e/${eventSlug}/program`}>
+          Вся программа
+        </Link>
+      </nav>
       <article className="session-detail">
         <p className="eyebrow">
+          {formatEventDate(session.startsAt, program.event.timezone)} · {" "}
           <time dateTime={session.startsAt}>
             {formatEventTime(session.startsAt, program.event.timezone)}
           </time>
@@ -63,7 +70,9 @@ export default async function SessionPage({
               <article key={speaker.id}>
                 <h3>{speaker.name}</h3>
                 <p>
-                  {[sessionRole, speaker.role, speaker.company].filter(Boolean).join(" · ")}
+                  {[...new Set([sessionRole, speaker.role, speaker.company].filter(Boolean))].join(
+                    " · ",
+                  )}
                 </p>
                 {speaker.bio ? <p>{speaker.bio}</p> : null}
               </article>
@@ -73,11 +82,9 @@ export default async function SessionPage({
 
         {liveDestination ? (
           <a className="live-cta" href={liveDestination.href}>
-            Перейти в LIVE Q&amp;A <span aria-hidden="true">↗</span>
+            Открыть LIVE Q&amp;A <span aria-hidden="true">↗</span>
           </a>
-        ) : (
-          <p className="quiet-note">LIVE Q&amp;A для этой сессии не предусмотрен.</p>
-        )}
+        ) : null}
       </article>
     </main>
   );

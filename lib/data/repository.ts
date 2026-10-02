@@ -1,4 +1,4 @@
-import type { ProgramAggregate } from "@/lib/domain/types";
+import type { ProgramAggregate, Session } from "@/lib/domain/types";
 
 export type PublicProgramRead =
   | { status: "not_found" }
@@ -8,4 +8,9 @@ export type PublicProgramRead =
 export interface CompanionRepository {
   getPublicProgramBySlug(eventSlug: string): PublicProgramRead;
   getOrganizerProgram(eventId: string): ProgramAggregate | null;
+}
+
+export interface SessionWrite {
+  session: Session;
+  speakerIds: string[];
 }

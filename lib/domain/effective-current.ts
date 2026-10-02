@@ -8,10 +8,18 @@ export interface EffectiveCurrentSession {
   source: CurrentSessionSource;
 }
 
-function compareSessions(left: Session, right: Session): number {
+export function compareSessionsBySchedule(left: Session, right: Session): number {
   return (
     toEpochMilliseconds(left.startsAt) - toEpochMilliseconds(right.startsAt) ||
     left.sortOrder - right.sortOrder ||
+    left.id.localeCompare(right.id)
+  );
+}
+
+export function compareSessionsByProgramOrder(left: Session, right: Session): number {
+  return (
+    left.sortOrder - right.sortOrder ||
+    toEpochMilliseconds(left.startsAt) - toEpochMilliseconds(right.startsAt) ||
     left.id.localeCompare(right.id)
   );
 }
@@ -39,7 +47,7 @@ export function resolveEffectiveCurrentSession(options: {
         toEpochMilliseconds(session.startsAt) <= now &&
         now < toEpochMilliseconds(session.endsAt),
     )
-    .sort(compareSessions)[0];
+    .sort(compareSessionsBySchedule)[0];
 
   return plannedSession ? { session: plannedSession, source: "planned" } : null;
 }
@@ -58,7 +66,7 @@ export function findNextSession(options: {
         session.id !== options.currentSessionId &&
         toEpochMilliseconds(session.startsAt) > now,
     )
-    .sort(compareSessions)[0];
+    .sort(compareSessionsBySchedule)[0];
 
   return next ?? null;
 }

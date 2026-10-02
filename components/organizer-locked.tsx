@@ -5,8 +5,8 @@ export function OrganizerLocked() {
         <p className="eyebrow">Organizer boundary</p>
         <h1 id="organizer-access-title">Доступ организатора закрыт</h1>
         <p>
-          Phase 1 принимает только локальный development Bearer token. В production этот
-          placeholder всегда отключён.
+          Локальный editor доступен только с loopback-адреса и явно включённым demo mode
+          или development Bearer token. На внешнем хосте placeholder всегда закрыт.
         </p>
       </section>
     </main>

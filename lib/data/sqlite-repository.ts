@@ -2,7 +2,11 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 
-import type { CompanionRepository, PublicProgramRead } from "@/lib/data/repository";
+import type {
+  CompanionRepository,
+  PublicProgramRead,
+  SessionWrite,
+} from "@/lib/data/repository";
 import type {
   CompanionEvent,
   EventRuntime,
@@ -160,6 +164,18 @@ export class SqliteCompanionRepository implements CompanionRepository {
     this.database.close();
   }
 
+  private transaction<T>(operation: () => T): T {
+    this.database.exec("BEGIN IMMEDIATE");
+    try {
+      const result = operation();
+      this.database.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   saveEvent(event: CompanionEvent): void {
     validateEvent(event);
     this.database
@@ -280,6 +296,137 @@ export class SqliteCompanionRepository implements CompanionRepository {
       .run(mapping.sessionId, mapping.integrationId, mapping.externalRoomSlug);
   }
 
+  createSession(write: SessionWrite): void {
+    validateSession(write.session);
+    this.transaction(() => {
+      this.saveSession(write.session);
+      this.replaceSessionSpeakers(write.session.eventId, write.session.id, write.speakerIds);
+    });
+  }
+
+  updateSession(write: SessionWrite): void {
+    validateSession(write.session);
+    this.transaction(() => {
+      const result = this.database
+        .prepare(
+          `UPDATE sessions SET
+            slug = ?, title = ?, summary = ?, starts_at = ?, ends_at = ?,
+            location_id = ?, sort_order = ?
+           WHERE id = ? AND event_id = ?`,
+        )
+        .run(
+          write.session.slug,
+          write.session.title,
+          write.session.summary,
+          normalizeInstant(write.session.startsAt),
+          normalizeInstant(write.session.endsAt),
+          write.session.locationId,
+          write.session.sortOrder,
+          write.session.id,
+          write.session.eventId,
+        );
+      if (result.changes !== 1) throw new Error("Session was not found");
+      this.replaceSessionSpeakers(write.session.eventId, write.session.id, write.speakerIds);
+    });
+  }
+
+  deleteSession(eventId: string, sessionId: string): void {
+    this.transaction(() => {
+      const runtime = this.database
+        .prepare(
+          `SELECT manual_current_session_id FROM event_runtime
+           WHERE event_id = ? AND manual_current_session_id = ?`,
+        )
+        .get(eventId, sessionId);
+      if (runtime) {
+        throw new Error("Clear the manual current override before deleting this session");
+      }
+      const result = this.database
+        .prepare("DELETE FROM sessions WHERE id = ? AND event_id = ?")
+        .run(sessionId, eventId);
+      if (result.changes !== 1) throw new Error("Session was not found");
+    });
+  }
+
+  reorderSessions(eventId: string, orderedSessionIds: readonly string[]): void {
+    this.transaction(() => {
+      const rows = this.database
+        .prepare("SELECT id FROM sessions WHERE event_id = ? ORDER BY id")
+        .all(eventId) as Row[];
+      const existing = rows.map((row) => text(row, "id")).sort();
+      const requested = [...orderedSessionIds].sort();
+      if (
+        existing.length !== requested.length ||
+        new Set(requested).size !== requested.length ||
+        existing.some((id, index) => id !== requested[index])
+      ) {
+        throw new Error("Reorder must contain every event session exactly once");
+      }
+
+      const statement = this.database.prepare(
+        "UPDATE sessions SET sort_order = ? WHERE id = ? AND event_id = ?",
+      );
+      orderedSessionIds.forEach((sessionId, sortOrder) => {
+        const result = statement.run(sortOrder, sessionId, eventId);
+        if (result.changes !== 1) throw new Error("Reorder failed");
+      });
+    });
+  }
+
+  setProgramPublished(eventId: string, publishedAt: string): void {
+    const result = this.database
+      .prepare(
+        "UPDATE events SET program_state = 'published', published_at = ? WHERE id = ?",
+      )
+      .run(normalizeInstant(publishedAt), eventId);
+    if (result.changes !== 1) throw new Error("Event was not found");
+  }
+
+  setProgramUnpublished(eventId: string): void {
+    const result = this.database
+      .prepare("UPDATE events SET program_state = 'unpublished' WHERE id = ?")
+      .run(eventId);
+    if (result.changes !== 1) throw new Error("Event was not found");
+  }
+
+  setManualCurrentSession(
+    eventId: string,
+    sessionId: string,
+    actorId: string,
+    setAt: string,
+  ): void {
+    const result = this.database
+      .prepare("SELECT id FROM sessions WHERE id = ? AND event_id = ?")
+      .get(sessionId, eventId);
+    if (!result) throw new Error("Manual current session must belong to the event");
+
+    this.database
+      .prepare(
+        `INSERT INTO event_runtime (
+          event_id, manual_current_session_id, override_set_at, override_set_by
+        ) VALUES (?, ?, ?, ?)
+        ON CONFLICT(event_id) DO UPDATE SET
+          manual_current_session_id = excluded.manual_current_session_id,
+          override_set_at = excluded.override_set_at,
+          override_set_by = excluded.override_set_by`,
+      )
+      .run(eventId, sessionId, normalizeInstant(setAt), actorId);
+  }
+
+  clearManualCurrentSession(eventId: string): void {
+    this.database
+      .prepare(
+        `INSERT INTO event_runtime (
+          event_id, manual_current_session_id, override_set_at, override_set_by
+        ) VALUES (?, NULL, NULL, NULL)
+        ON CONFLICT(event_id) DO UPDATE SET
+          manual_current_session_id = NULL,
+          override_set_at = NULL,
+          override_set_by = NULL`,
+      )
+      .run(eventId);
+  }
+
   getPublicProgramBySlug(eventSlug: string): PublicProgramRead {
     const visibility = this.database
       .prepare("SELECT id, program_state FROM events WHERE slug = ?")
@@ -306,6 +453,38 @@ export class SqliteCompanionRepository implements CompanionRepository {
     return program;
   }
 
+  private replaceSessionSpeakers(
+    eventId: string,
+    sessionId: string,
+    speakerIds: readonly string[],
+  ): void {
+    if (new Set(speakerIds).size !== speakerIds.length) {
+      throw new Error("A speaker can only be assigned once");
+    }
+    const session = this.database
+      .prepare("SELECT id FROM sessions WHERE id = ? AND event_id = ?")
+      .get(sessionId, eventId);
+    if (!session) throw new Error("Session was not found");
+
+    const validSpeakers = this.database
+      .prepare("SELECT id FROM speakers WHERE event_id = ?")
+      .all(eventId) as Row[];
+    const validIds = new Set(validSpeakers.map((row) => text(row, "id")));
+    if (speakerIds.some((speakerId) => !validIds.has(speakerId))) {
+      throw new Error("Every assigned speaker must belong to the event");
+    }
+
+    this.database
+      .prepare("DELETE FROM session_speakers WHERE session_id = ?")
+      .run(sessionId);
+    const insert = this.database.prepare(
+      `INSERT INTO session_speakers (
+        session_id, speaker_id, sort_order, session_role
+      ) VALUES (?, ?, ?, NULL)`,
+    );
+    speakerIds.forEach((speakerId, sortOrder) => insert.run(sessionId, speakerId, sortOrder));
+  }
+
   private getProgramByEventId(eventId: string): ProgramAggregate | null {
     const eventRow = this.database
       .prepare("SELECT * FROM events WHERE id = ?")
@@ -323,7 +502,7 @@ export class SqliteCompanionRepository implements CompanionRepository {
         mapLocation,
       ),
       sessions: all(
-        "SELECT * FROM sessions WHERE event_id = ? ORDER BY starts_at, sort_order, id",
+        "SELECT * FROM sessions WHERE event_id = ? ORDER BY sort_order, starts_at, id",
       ).map(mapSession),
       speakers: all("SELECT * FROM speakers WHERE event_id = ? ORDER BY name, id").map(
         mapSpeaker,

@@ -19,8 +19,8 @@ and all public reads pass through `getPublicProgramBySlug`.
 
 ## Modules
 
-- `app/e/[eventSlug]`: public TODAY, program and session route skeletons.
-- `app/organizer`: protected organizer route skeletons.
+- `app/e/[eventSlug]`: public TODAY, complete program and session detail routes.
+- `app/organizer`: protected server-action program editor and event settings shell.
 - `lib/domain`: types, invariants, presentation helpers and current-session logic.
 - `lib/data`: repository contract and SQLite implementation.
 - `lib/live`: provider-neutral contract and link-only SANCHEZ adapter.
@@ -29,7 +29,9 @@ and all public reads pass through `getPublicProgramBySlug`.
 
 ## Persistence
 
-Phase 1 uses Node's built-in SQLite driver to keep the local dependency set small.
+The local vertical slice uses Node's built-in SQLite driver to keep the dependency
+set small. Phase 2 adds transaction-backed organizer commands for session CRUD,
+speaker replacement, complete-list reorder, publication and manual-current state.
 The migration enforces:
 
 - `ends_at > starts_at` for events and sessions;
@@ -43,9 +45,14 @@ Application validation additionally requires timezone-bearing timestamps and a v
 IANA event timezone. Instants are normalized to UTC ISO strings before persistence;
 the IANA timezone controls display, not instant comparison.
 
+Reorder accepts every session ID for the event exactly once and writes all positions
+inside one immediate transaction. Session create/update and speaker assignment are
+also one transaction, so partial organizer writes cannot escape.
+
 The final hosted database provider and region are deliberately deferred. A future
 adapter may replace SQLite without changing route/domain contracts. The current
-SQLite file is a local Phase 1 foundation, not a Vercel persistence recommendation.
+SQLite file is a local vertical-slice foundation, not a Vercel persistence
+recommendation.
 
 ## Effective current session
 
@@ -56,9 +63,15 @@ deterministic. Its order is exact:
 2. a session satisfying `starts_at <= now < ends_at`;
 3. `null`.
 
-If malformed data contains overlapping planned sessions, selection is deterministic:
-earliest start, then `sort_order`, then ID. Multi-track current-state semantics are
-not defined in Phase 1.
+If planned sessions overlap, one effective current session is selected
+deterministically: earliest start, then `sort_order`, then ID. Other simultaneous
+sessions stay visible as `concurrent` in the public timeline. Multi-track
+current-state semantics beyond that presentation rule remain deferred.
+
+TODAY derives NOW and NEXT from the same aggregate. With a valid manual override,
+NEXT follows the saved program order after that session. Without an override, NEXT
+is the earliest future session by timestamp. Gaps therefore produce no NOW and the
+correct future NEXT.
 
 Q&A current room and `questions_open` are intentionally absent from this resolver.
 
@@ -84,6 +97,8 @@ claim that Q&A is open. A disabled or missing mapping produces no CTA.
 
 ## Authentication boundary
 
-No LIVE Q&A cookie or session is reused. The Phase 1 placeholder accepts a configured
-Bearer token only outside production. Production always denies it. Choosing and
-integrating production auth requires a separate decision and real infrastructure.
+No LIVE Q&A cookie or session is reused. The local placeholder accepts either a
+configured Bearer token or an explicit local-demo switch, and only when the request
+Host is loopback. A deployed/non-loopback request is always denied regardless of
+environment variables. Choosing and integrating production auth requires a separate
+decision and real infrastructure.

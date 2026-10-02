@@ -74,3 +74,36 @@ credentials or couple to existing Q&A auth.
 Port only the concepts of NOW/NEXT, a clear coming-soon state and separate
 publication control. Do not copy `ProgramClient`, Supabase helpers, migrations,
 cumulative-duration timing, Q&A tables, AI import or brand/background systems.
+
+## Phase 2 implementation decisions
+
+### Server actions over a client data layer
+
+Organizer mutations are server actions behind the organizer-auth boundary. They
+write through the SQLite repository, then invalidate only the organizer and public
+event paths affected by the command. The browser never receives database access.
+
+### Program order and clock time remain distinct
+
+`sort_order` is the organizer's explicit saved program order. Timestamps are the
+source of planned current-session resolution and gap detection. Manual-current NEXT
+uses saved program order so an override does not create a misleading clock-based
+successor.
+
+### Overlap stays visible
+
+The effective-current invariant still produces one NOW session. A simultaneous
+session is retained in the program timeline with a `concurrent` label instead of
+being hidden or incorrectly marked upcoming.
+
+### Local demo auth is loopback-only
+
+The Phase 2 demo switch is usable only through a loopback Host. This keeps local
+acceptance practical without turning the placeholder into a deployable auth scheme.
+Production organizer authentication remains explicitly deferred.
+
+### Demo data is fictional and non-destructive
+
+`npm run demo:seed` inserts one known fictional event into the configured local
+SQLite file and refuses to overwrite an event with the same ID. Its LIVE mappings
+exercise URL generation only; they do not claim or require a real Q&A event.

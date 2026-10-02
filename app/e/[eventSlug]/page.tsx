@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { ComingSoonCard } from "@/components/coming-soon-card";
 import { SessionCard } from "@/components/session-card";
 import { getRepository } from "@/lib/data/database";
-import { findNextSession, resolveEffectiveCurrentSession } from "@/lib/domain/effective-current";
+import { formatEventDate } from "@/lib/domain/presentation";
+import { buildTodayView } from "@/lib/domain/today";
 import { getSessionLiveDestination } from "@/lib/live/session-destination";
 
 export const dynamic = "force-dynamic";
@@ -28,18 +29,7 @@ export default async function TodayPage({
 
   const { program } = result;
   const now = new Date();
-  const current = resolveEffectiveCurrentSession({
-    eventId: program.event.id,
-    sessions: program.sessions,
-    runtime: program.runtime,
-    now,
-  });
-  const next = findNextSession({
-    eventId: program.event.id,
-    sessions: program.sessions,
-    currentSessionId: current?.session.id,
-    now,
-  });
+  const { current, next } = buildTodayView(program, now);
   const liveDestination = current
     ? getSessionLiveDestination(program, current.session.id)
     : null;
@@ -54,9 +44,9 @@ export default async function TodayPage({
       </nav>
 
       <header className="event-heading">
-        <p className="eyebrow">Сейчас на событии</p>
+        <p className="eyebrow">{formatEventDate(now.toISOString(), program.event.timezone)}</p>
         <h1>{program.event.title}</h1>
-        <p className="timezone-note">Время события · {program.event.timezone}</p>
+        <p className="timezone-note">Ваш ориентир на событии · {program.event.timezone}</p>
       </header>
 
       <section className="now-stage" aria-labelledby="now-title">
@@ -65,18 +55,16 @@ export default async function TodayPage({
         </div>
         <div className="now-content">
           <p className="eyebrow" id="now-title">
-            NOW {current?.source === "manual" ? "· выбрано организатором" : "· по программе"}
+            NOW {current?.source === "manual" ? "· выбор организатора" : "· по расписанию"}
           </p>
           {current ? (
             <>
-              <SessionCard program={program} session={current.session} />
+              <SessionCard program={program} session={current.session} showSummary />
               {liveDestination ? (
                 <a className="live-cta" href={liveDestination.href}>
-                  Задать вопрос в LIVE <span aria-hidden="true">↗</span>
+                  Задать вопрос <span aria-hidden="true">↗</span>
                 </a>
-              ) : (
-                <p className="quiet-note">Для этой сессии LIVE Q&amp;A не подключён.</p>
-              )}
+              ) : null}
             </>
           ) : (
             <div className="empty-now">
@@ -95,7 +83,7 @@ export default async function TodayPage({
           <Link href={`/e/${eventSlug}/program`}>Вся программа →</Link>
         </div>
         {next ? (
-          <SessionCard program={program} session={next} />
+          <SessionCard program={program} session={next} label="Следующая сессия" />
         ) : (
           <p className="quiet-note">Следующих сессий пока нет.</p>
         )}
