@@ -1,24 +1,25 @@
 import { describe, expect, it } from "vitest";
 
 import { createTestRepository } from "@/tests/helpers/repository";
-import type { ProgramAggregate } from "@/lib/domain/types";
 import { event, makeProgram } from "@/tests/helpers/fixtures";
 
 describe("public publication boundary", () => {
-  it("does not expose a draft event or any draft payload", () => {
+  it("does not expose a draft event or any draft payload", async () => {
     const repository = createTestRepository(
       makeProgram({
         event: { ...event, programState: "draft", publishedAt: null },
       }),
     );
 
-    expect(repository.getPublicProgramBySlug(event.slug)).toEqual({ status: "not_found" });
+    await expect(repository.getPublicProgramBySlug(event.slug)).resolves.toEqual({
+      status: "not_found",
+    });
     repository.close();
   });
 
-  it("exposes a published program", () => {
+  it("exposes a published program", async () => {
     const repository = createTestRepository(makeProgram());
-    const result = repository.getPublicProgramBySlug(event.slug);
+    const result = await repository.getPublicProgramBySlug(event.slug);
 
     expect(result.status).toBe("published");
     if (result.status === "published") {
@@ -28,30 +29,28 @@ describe("public publication boundary", () => {
     repository.close();
   });
 
-  it("returns a payload-free unavailable state after unpublish", () => {
+  it("returns a payload-free unavailable state after unpublish", async () => {
     const repository = createTestRepository(
       makeProgram({
         event: { ...event, programState: "unpublished" },
       }),
     );
 
-    expect(repository.getPublicProgramBySlug(event.slug)).toEqual({ status: "unavailable" });
+    await expect(repository.getPublicProgramBySlug(event.slug)).resolves.toEqual({
+      status: "unavailable",
+    });
     repository.close();
   });
 
-  it("returns unavailable instead of throwing when publication changes during a public read", () => {
+  it("returns unavailable without a program payload after publication changes", async () => {
     const repository = createTestRepository(makeProgram());
-    const internalRepository = repository as unknown as {
-      getProgramByEventId(eventId: string): ProgramAggregate | null;
-    };
-    const readAggregate = internalRepository.getProgramByEventId.bind(repository);
+    expect((await repository.getPublicProgramBySlug(event.slug)).status).toBe("published");
 
-    internalRepository.getProgramByEventId = (eventId) => {
-      repository.setProgramUnpublished(eventId);
-      return readAggregate(eventId);
-    };
+    await repository.setProgramUnpublished(event.id);
 
-    expect(repository.getPublicProgramBySlug(event.slug)).toEqual({ status: "unavailable" });
+    await expect(repository.getPublicProgramBySlug(event.slug)).resolves.toEqual({
+      status: "unavailable",
+    });
     repository.close();
   });
 });

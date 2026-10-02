@@ -21,7 +21,7 @@ export default async function ProgramPage({
   params: Promise<{ eventSlug: string }>;
 }) {
   const { eventSlug } = await params;
-  const result = getRepository().getPublicProgramBySlug(eventSlug);
+  const result = await getRepository().getPublicProgramBySlug(eventSlug);
 
   if (result.status === "not_found") notFound();
   if (result.status === "unavailable") {

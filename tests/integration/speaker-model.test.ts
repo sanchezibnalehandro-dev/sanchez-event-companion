@@ -5,9 +5,9 @@ import { createTestRepository } from "@/tests/helpers/repository";
 import { event, makeProgram, panel } from "@/tests/helpers/fixtures";
 
 describe("session speaker many-to-many model", () => {
-  it("persists multiple ordered speakers for a panel session", () => {
+  it("persists multiple ordered speakers for a panel session", async () => {
     const repository = createTestRepository(makeProgram());
-    const result = repository.getPublicProgramBySlug(event.slug);
+    const result = await repository.getPublicProgramBySlug(event.slug);
 
     expect(result.status).toBe("published");
     if (result.status === "published") {

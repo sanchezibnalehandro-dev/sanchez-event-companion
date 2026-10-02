@@ -19,7 +19,7 @@ export default async function OrganizerProgramPage({
   if (!organizer) return <OrganizerLocked />;
 
   const { eventId } = await params;
-  const program = getRepository().getOrganizerProgram(eventId);
+  const program = await getRepository().getOrganizerProgram(eventId);
   if (!program) notFound();
   const today = buildTodayView(program, new Date());
   const query = await searchParams;
