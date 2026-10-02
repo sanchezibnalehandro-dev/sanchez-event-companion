@@ -55,7 +55,12 @@ export default async function TodayPage({
         </div>
         <div className="now-content">
           <p className="eyebrow" id="now-title">
-            NOW {current?.source === "manual" ? "· выбор организатора" : "· по расписанию"}
+            NOW
+            {current
+              ? current.source === "manual"
+                ? " · выбор организатора"
+                : " · по расписанию"
+              : ""}
           </p>
           {current ? (
             <>

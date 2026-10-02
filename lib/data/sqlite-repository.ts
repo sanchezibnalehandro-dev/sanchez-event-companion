@@ -176,6 +176,18 @@ export class SqliteCompanionRepository implements CompanionRepository {
     }
   }
 
+  private readTransaction<T>(operation: () => T): T {
+    this.database.exec("BEGIN");
+    try {
+      const result = operation();
+      this.database.exec("COMMIT");
+      return result;
+    } catch (error) {
+      this.database.exec("ROLLBACK");
+      throw error;
+    }
+  }
+
   saveEvent(event: CompanionEvent): void {
     validateEvent(event);
     this.database
@@ -428,23 +440,28 @@ export class SqliteCompanionRepository implements CompanionRepository {
   }
 
   getPublicProgramBySlug(eventSlug: string): PublicProgramRead {
-    const visibility = this.database
-      .prepare("SELECT id, program_state FROM events WHERE slug = ?")
-      .get(eventSlug) as Row | undefined;
+    return this.readTransaction(() => {
+      const visibility = this.database
+        .prepare("SELECT id, program_state FROM events WHERE slug = ?")
+        .get(eventSlug) as Row | undefined;
 
-    if (!visibility || text(visibility, "program_state") === "draft") {
-      return { status: "not_found" };
-    }
-    if (text(visibility, "program_state") === "unpublished") {
-      return { status: "unavailable" };
-    }
+      if (!visibility || text(visibility, "program_state") === "draft") {
+        return { status: "not_found" };
+      }
+      if (text(visibility, "program_state") === "unpublished") {
+        return { status: "unavailable" };
+      }
 
-    const program = this.getProgramByEventId(text(visibility, "id"));
-    if (!program || program.event.programState !== "published") {
-      throw new Error("Published program changed while it was being read");
-    }
-    validateProgramAggregate(program);
-    return { status: "published", program };
+      const program = this.getProgramByEventId(text(visibility, "id"));
+      if (!program || program.event.programState === "draft") {
+        return { status: "not_found" };
+      }
+      if (program.event.programState === "unpublished") {
+        return { status: "unavailable" };
+      }
+      validateProgramAggregate(program);
+      return { status: "published", program };
+    });
   }
 
   getOrganizerProgram(eventId: string): ProgramAggregate | null {
