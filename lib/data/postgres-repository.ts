@@ -1,5 +1,6 @@
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
+import { createPostgresPoolConfig } from "./postgres-connection.ts";
 import type {
   CompanionRepository,
   PublicProgramRead,
@@ -153,7 +154,9 @@ export class PostgresCompanionRepository implements CompanionRepository {
   constructor(private readonly pool: Pool) {}
 
   static open(connectionString: string): PostgresCompanionRepository {
-    return new PostgresCompanionRepository(new Pool({ connectionString }));
+    return new PostgresCompanionRepository(
+      new Pool(createPostgresPoolConfig(connectionString)),
+    );
   }
 
   async close(): Promise<void> {
