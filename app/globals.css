@@ -535,6 +535,38 @@ h1 {
   color: var(--danger);
 }
 
+.organizer-login {
+  max-width: 620px;
+}
+
+.organizer-login-form {
+  display: grid;
+  gap: 20px;
+  margin-top: 28px;
+}
+
+.organizer-login-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.organizer-login-form input {
+  min-height: 48px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+}
+
+.organizer-login-form .button {
+  justify-self: start;
+}
+
 .organizer-toolbar {
   display: flex;
   align-items: center;

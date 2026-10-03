@@ -112,9 +112,19 @@ claim that Q&A is open. A disabled or missing mapping produces no CTA.
 
 ## Authentication boundary
 
-No LIVE Q&A cookie or session is reused. Outside production, the local placeholder
-accepts either a configured Bearer token or an explicit local-demo switch. The demo
-command binds Next.js to `127.0.0.1`; request Host headers are not an authentication
-signal. Production always denies both local mechanisms regardless of environment
-variables. Choosing and integrating production auth requires a separate decision
-and real infrastructure.
+Companion PostgreSQL auth is the future primary identity for the unified Organizer
+Console. Production organizer credentials and hashed sessions are owned by Companion;
+raw session tokens exist only in an HttpOnly cookie. Organizer authentication remains
+outside `CompanionRepository`, so identity storage cannot leak into program semantics.
+
+No LIVE Q&A cookie or session is reused. The `sanchez-live-qna` Supabase Auth flow is
+unchanged in Phase 4.2 and remains a standalone / maintenance auth path. A future
+server-side integration contract must let the unified Organizer Console open Q&A
+management without a second interactive login. That contract and the Q&A integration
+are explicitly not implemented in Phase 4.2.
+
+Outside production, the local placeholder still accepts either a configured Bearer
+token or an explicit local-demo switch. The demo command binds Next.js to `127.0.0.1`;
+request Host headers are not an authentication signal. Production always denies both
+local mechanisms regardless of environment variables and validates only the Companion
+PostgreSQL session cookie.

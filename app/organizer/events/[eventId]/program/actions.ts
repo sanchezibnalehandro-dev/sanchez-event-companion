@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { getRequestOrganizer } from "@/lib/auth/request-organizer";
+import { requireOrganizer } from "@/lib/auth/request-organizer";
 import { getRepository } from "@/lib/data/database";
 import type { CompanionRepository } from "@/lib/data/repository";
 import { eventLocalDateTimeToInstant } from "@/lib/domain/presentation";
@@ -43,8 +43,7 @@ async function runOrganizerAction(
     actorId: string,
   ) => Promise<void>,
 ): Promise<never> {
-  const actor = await getRequestOrganizer();
-  if (!actor) redirect(feedbackUrl(eventId, "error", "Доступ организатора закрыт"));
+  const actor = await requireOrganizer(`/organizer/events/${encodeURIComponent(eventId)}/program`);
 
   const repository = getRepository();
   const program = await repository.getOrganizerProgram(eventId);

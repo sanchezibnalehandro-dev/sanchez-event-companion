@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
-import { OrganizerLocked } from "@/components/organizer-locked";
-import { getRequestOrganizer } from "@/lib/auth/request-organizer";
+import { logoutOrganizerAction } from "@/app/organizer/actions";
+import { requireOrganizer } from "@/lib/auth/request-organizer";
 import { getRepository } from "@/lib/data/database";
 
 export const dynamic = "force-dynamic";
@@ -11,10 +11,8 @@ export default async function OrganizerSettingsPage({
 }: {
   params: Promise<{ eventId: string }>;
 }) {
-  const organizer = await getRequestOrganizer();
-  if (!organizer) return <OrganizerLocked />;
-
   const { eventId } = await params;
+  await requireOrganizer(`/organizer/events/${encodeURIComponent(eventId)}/settings`);
   const program = await getRepository().getOrganizerProgram(eventId);
   if (!program) notFound();
 
@@ -22,6 +20,9 @@ export default async function OrganizerSettingsPage({
     <main className="shell organizer-shell">
       <p className="eyebrow">Organizer · settings boundary</p>
       <h1>{program.event.title}</h1>
+      <form action={logoutOrganizerAction}>
+        <button className="button secondary-button" type="submit">Выйти</button>
+      </form>
       <dl className="settings-list">
         <div>
           <dt>Timezone</dt>
@@ -36,9 +37,7 @@ export default async function OrganizerSettingsPage({
           <dd>{program.liveIntegrations.length}</dd>
         </div>
       </dl>
-      <p className="quiet-note">
-        Production-аутентификация и формы настроек не входят в Phase 1.
-      </p>
+      <p className="quiet-note">Формы настроек появятся в отдельной фазе.</p>
     </main>
   );
 }

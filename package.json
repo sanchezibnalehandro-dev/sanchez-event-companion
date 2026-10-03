@@ -12,6 +12,7 @@
     "build": "next build",
     "start": "next start",
     "demo:seed": "node scripts/seed-demo.mjs",
+    "organizer:create": "node --experimental-strip-types scripts/create-organizer.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
