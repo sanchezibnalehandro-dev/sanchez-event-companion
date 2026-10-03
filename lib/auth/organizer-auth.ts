@@ -2,7 +2,9 @@ import { timingSafeEqual } from "node:crypto";
 
 export interface OrganizerActor {
   id: string;
-  source: "local-development-bearer" | "local-demo-mode";
+  email: string | null;
+  displayName: string | null;
+  source: "local-development-bearer" | "local-demo-mode" | "postgres-session";
 }
 
 export function isLocalDemoMode(options: {
@@ -23,7 +25,12 @@ export function authenticateOrganizer(options: {
   }
 
   if (isLocalDemoMode(options)) {
-    return { id: "local-demo-organizer", source: "local-demo-mode" };
+    return {
+      id: "local-demo-organizer",
+      email: null,
+      displayName: "Local demo organizer",
+      source: "local-demo-mode",
+    };
   }
 
   if (!options.configuredToken) return null;
@@ -39,7 +46,12 @@ export function authenticateOrganizer(options: {
     return null;
   }
 
-  return { id: "local-development-organizer", source: "local-development-bearer" };
+  return {
+    id: "local-development-organizer",
+    email: null,
+    displayName: "Local development organizer",
+    source: "local-development-bearer",
+  };
 }
 
 export function authenticateOrganizerRequest(options: {

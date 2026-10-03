@@ -125,3 +125,24 @@ engine remain deferred.
 Strictly overlapping intervals form a shared visual range with one lane per location.
 Back-to-back intervals stay separate. The effective-current resolver is unchanged:
 one session remains primary and active alternatives are presented as concurrent.
+
+## Phase 4.2 implementation decisions
+
+### Companion auth is the primary Organizer Console identity
+
+Companion-owned PostgreSQL users and sessions are the future primary identity for the
+unified Organizer Console. Passwords use versioned scrypt hashes; session cookies carry
+only a random raw token while PostgreSQL stores its SHA-256 hash. Production organizer
+pages and mutations validate that session on the server.
+
+The existing `sanchez-live-qna` Supabase Auth implementation is not integrated,
+replaced or modified. It remains a standalone / maintenance auth path. A future
+server-side integration contract must allow an authenticated Organizer Console to open
+Q&A management without a second interactive login, but neither that contract nor the
+integration is part of Phase 4.2.
+
+### Local access remains explicit and non-production only
+
+The loopback demo switch and optional development Bearer token remain available for
+local work. Production ignores both mechanisms and never falls back to them when a
+PostgreSQL session is missing, expired, invalid or belongs to a disabled organizer.

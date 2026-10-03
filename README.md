@@ -8,7 +8,7 @@ This repository is a separate product from **SANCHEZ LIVE Q&A**. Companion owns
 event program data, publication and the event's effective current session. It does
 not own Q&A rooms, questions, votes, moderation, or Q&A current-room state.
 
-## Phase 2 scope
+## Current scope
 
 Implemented:
 
@@ -21,14 +21,16 @@ Implemented:
 - explicit set/clear manual current override;
 - safe local demo seed with eight fictional sessions, parallel locations, gaps, a panel and a non-LIVE break;
 - server-side publication filtering;
-- link-only SANCHEZ LIVE Q&A adapter.
+- link-only SANCHEZ LIVE Q&A adapter;
+- production organizer email/password authentication with PostgreSQL-backed sessions;
+- a minimal Organizer Console root and explicit logout.
 
 Explicitly out of scope:
 
 - People, participant profiles, Meetings, messaging and AI;
 - Word Cloud, backstage tasks and speaker self-service;
 - a Q&A status API or direct Q&A database access;
-- production authentication, hosted database selection and deployment.
+- hosted deployment, unified Q&A management authentication and infrastructure rollout.
 
 In this product, **current session means event current state, not Q&A current
 room**. Q&A state never participates in the resolver.
@@ -38,7 +40,7 @@ room**. Q&A state never participates in the resolver.
 - Next.js 16 App Router and React 19;
 - strict TypeScript;
 - server components and server actions;
-- Node.js built-in SQLite (`node:sqlite`);
+- PostgreSQL production persistence and Node.js built-in SQLite for local demo;
 - Vitest and ESLint;
 - no UI framework, ORM, Supabase client or Q&A SDK.
 
@@ -84,6 +86,7 @@ npm test
 npm run build
 npm run demo:seed
 npm run dev:demo
+npm run organizer:create
 ```
 
 ## Event current-session rule

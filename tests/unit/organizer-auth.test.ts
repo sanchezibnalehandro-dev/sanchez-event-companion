@@ -60,6 +60,11 @@ describe("organizer auth boundary", () => {
         environment: "development",
         localDemoEnabled: true,
       }),
-    ).toEqual({ id: "local-demo-organizer", source: "local-demo-mode" });
+    ).toEqual({
+      id: "local-demo-organizer",
+      email: null,
+      displayName: "Local demo organizer",
+      source: "local-demo-mode",
+    });
   });
 });
