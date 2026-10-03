@@ -2,11 +2,13 @@ import { mkdirSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 
-import type {
-  CompanionRepository,
-  PublicProgramRead,
-  SessionUpdate,
-  SessionWrite,
+import {
+  OrganizerEventError,
+  prepareOrganizerEvent,
+  type CompanionRepository,
+  type PublicProgramRead,
+  type SessionUpdate,
+  type SessionWrite,
 } from "@/lib/data/repository";
 import type {
   CompanionEvent,
@@ -53,6 +55,10 @@ function integer(row: Row, key: string): number {
     throw new Error(`Expected integer column ${key}`);
   }
   return value;
+}
+
+function isDuplicateSlugError(error: unknown): boolean {
+  return error instanceof Error && /UNIQUE constraint failed: events\.slug/i.test(error.message);
 }
 
 function mapEvent(row: Row): CompanionEvent {
@@ -560,6 +566,48 @@ export class SqliteCompanionRepository implements CompanionRepository {
     const program = this.getProgramByEventId(eventId);
     if (program) validateProgramAggregate(program);
     return program;
+  }
+
+  async listOrganizerEvents(): Promise<CompanionEvent[]> {
+    return this.database
+      .prepare("SELECT * FROM events ORDER BY starts_at ASC, id ASC")
+      .all()
+      .map((row) => mapEvent(row as Row));
+  }
+
+  async getOrganizerEvent(eventId: string): Promise<CompanionEvent | null> {
+    const row = this.database.prepare("SELECT * FROM events WHERE id = ?").get(eventId) as
+      | Row
+      | undefined;
+    return row ? mapEvent(row) : null;
+  }
+
+  async createOrganizerEvent(input: Parameters<typeof prepareOrganizerEvent>[0]): Promise<CompanionEvent> {
+    const event = prepareOrganizerEvent(input);
+    try {
+      this.transaction(() => {
+        this.database
+          .prepare(
+            `INSERT INTO events (
+              id, slug, title, timezone, starts_at, ends_at, program_state, published_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'draft', NULL)`,
+          )
+          .run(
+            event.id,
+            event.slug,
+            event.title,
+            event.timezone,
+            normalizeInstant(event.startsAt),
+            normalizeInstant(event.endsAt),
+          );
+      });
+    } catch (error) {
+      if (isDuplicateSlugError(error)) {
+        throw new OrganizerEventError("duplicate_slug", "An event with this slug already exists");
+      }
+      throw error;
+    }
+    return { ...event, startsAt: normalizeInstant(event.startsAt), endsAt: normalizeInstant(event.endsAt) };
   }
 
   private replaceSessionSpeakers(

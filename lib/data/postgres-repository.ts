@@ -1,11 +1,13 @@
 import { Pool, type PoolClient, type QueryResultRow } from "pg";
 
 import { createPostgresPoolConfig } from "./postgres-connection.ts";
-import type {
-  CompanionRepository,
-  PublicProgramRead,
-  SessionUpdate,
-  SessionWrite,
+import {
+  OrganizerEventError,
+  prepareOrganizerEvent,
+  type CompanionRepository,
+  type PublicProgramRead,
+  type SessionUpdate,
+  type SessionWrite,
 } from "@/lib/data/repository";
 import type {
   CompanionEvent,
@@ -64,6 +66,10 @@ function boolean(row: Row, key: string): boolean {
   const value = row[key];
   if (typeof value !== "boolean") throw new Error(`Expected boolean column ${key}`);
   return value;
+}
+
+function isDuplicateSlugError(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error && error.code === "23505";
 }
 
 function mapEvent(row: Row): CompanionEvent {
@@ -580,6 +586,43 @@ export class PostgresCompanionRepository implements CompanionRepository {
       if (program) validateProgramAggregate(program);
       return program;
     });
+  }
+
+  async listOrganizerEvents(): Promise<CompanionEvent[]> {
+    const result = await this.pool.query("SELECT * FROM events ORDER BY starts_at ASC, id ASC");
+    return result.rows.map(mapEvent);
+  }
+
+  async getOrganizerEvent(eventId: string): Promise<CompanionEvent | null> {
+    const result = await this.pool.query("SELECT * FROM events WHERE id = $1", [eventId]);
+    return result.rows[0] ? mapEvent(result.rows[0]) : null;
+  }
+
+  async createOrganizerEvent(input: Parameters<typeof prepareOrganizerEvent>[0]): Promise<CompanionEvent> {
+    const event = prepareOrganizerEvent(input);
+    try {
+      await this.transaction(async (client) => {
+        await client.query(
+          `INSERT INTO events (
+            id, slug, title, timezone, starts_at, ends_at, program_state, published_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, 'draft', NULL)`,
+          [
+            event.id,
+            event.slug,
+            event.title,
+            event.timezone,
+            normalizeInstant(event.startsAt),
+            normalizeInstant(event.endsAt),
+          ],
+        );
+      });
+    } catch (error) {
+      if (isDuplicateSlugError(error)) {
+        throw new OrganizerEventError("duplicate_slug", "An event with this slug already exists");
+      }
+      throw error;
+    }
+    return { ...event, startsAt: normalizeInstant(event.startsAt), endsAt: normalizeInstant(event.endsAt) };
   }
 
   private async replaceSessionSpeakers(
