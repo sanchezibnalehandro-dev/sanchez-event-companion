@@ -8,3 +8,14 @@ coverage/
 .env*
 !.env.example
 *.tsbuildinfo
+
+# GSD local runtime
+.bg-shell/
+.claude/
+.mcp.json
+.gsd/runtime/
+.gsd/notifications.jsonl
+.gsd/gsd.db*
+.gsd/state.json
+.gsd-backups/
+.gsd-worktrees/
