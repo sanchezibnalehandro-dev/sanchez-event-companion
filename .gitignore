@@ -21,3 +21,6 @@ coverage/
 .gsd-worktrees/
 
 .gsd/
+
+.gsd-id
+test-results/
