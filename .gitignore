@@ -19,3 +19,5 @@ coverage/
 .gsd/state.json
 .gsd-backups/
 .gsd-worktrees/
+
+.gsd/
