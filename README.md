@@ -77,6 +77,13 @@ When `EVENT_COMPANION_LOCAL_DEMO=true`, the root route redirects to the seeded d
 event. Without that local-demo flag, `/` stays neutral and asks the guest to use the
 event link supplied by the organizer; it does not assume a production event slug.
 
+## Production PostgreSQL
+
+Timeweb production requires `DATABASE_CA_CERT` alongside `DATABASE_URL`. Set it
+to the complete multiline root CA PEM, including the `BEGIN CERTIFICATE` and
+`END CERTIFICATE` lines, not to a local path such as `ca.crt`. PostgreSQL TLS
+certificate verification remains enabled.
+
 ## Commands
 
 ```powershell

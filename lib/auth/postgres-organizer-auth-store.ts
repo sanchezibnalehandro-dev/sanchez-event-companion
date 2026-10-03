@@ -1,5 +1,6 @@
 import { Pool, type QueryResultRow } from "pg";
 
+import { createPostgresPoolConfig } from "../data/postgres-connection.ts";
 import type {
   OrganizerAuthStore,
   OrganizerIdentity,
@@ -48,7 +49,9 @@ export class PostgresOrganizerAuthStore implements OrganizerAuthStore {
   }
 
   static open(databaseUrl: string): PostgresOrganizerAuthStore {
-    return new PostgresOrganizerAuthStore(new Pool({ connectionString: databaseUrl }));
+    return new PostgresOrganizerAuthStore(
+      new Pool(createPostgresPoolConfig(databaseUrl)),
+    );
   }
 
   async close(): Promise<void> {
