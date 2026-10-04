@@ -161,7 +161,11 @@ export class PostgresCompanionRepository implements CompanionRepository {
 
   static open(connectionString: string): PostgresCompanionRepository {
     return new PostgresCompanionRepository(
-      new Pool(createPostgresPoolConfig(connectionString)),
+      new Pool(
+        createPostgresPoolConfig(connectionString, process.env.DATABASE_CA_CERT, {
+          strict: process.env.NODE_ENV === "production",
+        }),
+      ),
     );
   }
 
