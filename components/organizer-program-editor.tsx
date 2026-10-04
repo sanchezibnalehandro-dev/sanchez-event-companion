@@ -208,7 +208,25 @@ export function OrganizerProgramEditor({
       <section className="organizer-toolbar" aria-label="Публикация и текущее состояние">
         <div>
           <span className="toolbar-label">Публикация</span>
-          <strong>{program.event.programState}</strong>
+          <strong>
+            {program.event.programState === "published"
+              ? "Опубликовано"
+              : program.event.programState === "unpublished"
+                ? "Снято с публикации"
+                : "Черновик"}
+          </strong>
+          {program.event.programState === "published" ? (
+            <p className="quiet-note">
+              Изменения программы сразу видны гостям. {" "}
+              <a href={`/e/${encodeURIComponent(program.event.slug)}/program`}>
+                Открыть гостевую программу
+              </a>
+            </p>
+          ) : (
+            <p className="quiet-note">
+              Обычный публичный URL закрыт до явной публикации программы.
+            </p>
+          )}
         </div>
         <div className="toolbar-actions">
           {program.event.programState === "published" ? (

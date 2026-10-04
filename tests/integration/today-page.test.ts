@@ -1,14 +1,23 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { event, makeProgram, panel } from "@/tests/helpers/fixtures";
+import { SessionCard } from "@/components/session-card";
+import { event, makeProgram, opening, panel } from "@/tests/helpers/fixtures";
 
 const repositoryMock = vi.hoisted(() => ({
   getPublicProgramBySlug: vi.fn(),
 }));
+const notFoundMock = vi.hoisted(() =>
+  vi.fn(() => {
+    throw new Error("NEXT_NOT_FOUND");
+  }),
+);
 
 vi.mock("@/lib/data/database", () => ({
   getRepository: () => repositoryMock,
+}));
+vi.mock("next/navigation", () => ({
+  notFound: notFoundMock,
 }));
 
 import TodayPage from "@/app/e/[eventSlug]/page";
@@ -16,6 +25,7 @@ import TodayPage from "@/app/e/[eventSlug]/page";
 describe("guest hub page", () => {
   beforeEach(() => {
     repositoryMock.getPublicProgramBySlug.mockReset();
+    notFoundMock.mockClear();
   });
 
   afterEach(() => {
@@ -31,10 +41,16 @@ describe("guest hub page", () => {
     const page = await TodayPage({ params: Promise.resolve({ eventSlug: "industry-day" }) });
     const markup = renderToStaticMarkup(page);
 
+    expect(repositoryMock.getPublicProgramBySlug).toHaveBeenCalledOnce();
+    expect(repositoryMock.getPublicProgramBySlug).toHaveBeenCalledWith("industry-day");
+    expect(markup).toContain(event.title);
     expect(markup).toContain("Участвуйте");
     expect(markup).toContain("Задать вопрос спикеру");
     expect(markup).toContain('aria-disabled="true"');
     expect(markup).toContain("Программа дня");
+    expect(markup).toContain('href="/e/industry-day/program"');
+    expect(markup).not.toContain("Preview / Черновик");
+    expect(markup).not.toContain("guest-preview-marker");
     expect(markup).not.toContain("People");
     expect(markup).not.toContain("PHASE 2");
   });
@@ -60,5 +76,38 @@ describe("guest hub page", () => {
     expect(markup).toContain("https://sanchez-live-qna.vercel.app/ask.html?event=industry-2026");
     expect(markup).not.toContain("Открыто");
     expect(markup).not.toContain("iframe");
+  });
+
+  it("preserves missing and unavailable publication behavior", async () => {
+    repositoryMock.getPublicProgramBySlug.mockResolvedValueOnce({ status: "not_found" });
+
+    await expect(
+      TodayPage({ params: Promise.resolve({ eventSlug: "missing-event" }) }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(notFoundMock).toHaveBeenCalledOnce();
+    expect(repositoryMock.getPublicProgramBySlug).toHaveBeenCalledWith("missing-event");
+
+    repositoryMock.getPublicProgramBySlug.mockResolvedValueOnce({ status: "unavailable" });
+    const page = await TodayPage({ params: Promise.resolve({ eventSlug: "industry-day" }) });
+    const markup = renderToStaticMarkup(page);
+
+    expect(markup).toContain("Скоро здесь появится расписание");
+    expect(markup).not.toContain(event.title);
+    expect(markup).not.toContain("Участвуйте");
+    expect(markup).not.toContain("Preview / Черновик");
+  });
+
+  it("keeps public session links by default and disables them only in preview mode", () => {
+    const program = makeProgram();
+    const publicMarkup = renderToStaticMarkup(SessionCard({ program, session: opening }));
+    const previewMarkup = renderToStaticMarkup(
+      SessionCard({ program, session: opening, navigationMode: "preview" }),
+    );
+
+    expect(publicMarkup).toContain(
+      `href="/e/${program.event.slug}/sessions/${opening.slug}"`,
+    );
+    expect(previewMarkup).toContain(opening.title);
+    expect(previewMarkup).not.toContain("href=");
   });
 });

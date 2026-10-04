@@ -33,6 +33,15 @@ export default async function OrganizerProgramPage({
       <header className="organizer-heading">
         <p className="eyebrow">Event control · {program.event.timezone}</p>
         <h1>{program.event.title}</h1>
+        <div className={'organizer-links'}>
+          <a
+            href={`/organizer/events/${encodeURIComponent(eventId)}/preview`}
+            target={'_blank'}
+            rel={'noreferrer'}
+          >
+            Preview / Черновик ↗
+          </a>
+        </div>
         <div className="organizer-links">
           <a href={`/e/${program.event.slug}`} target="_blank" rel="noreferrer">
             Открыть TODAY ↗

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { CompanionRepository } from "@/lib/data/repository";
 import type { ProgramAggregate, Session } from "@/lib/domain/types";
+import { normalizeInstant } from "@/lib/domain/validation";
 import {
   event,
   location,
@@ -150,6 +151,82 @@ export function defineRepositoryBehaviorContract(
         expect((await harness.repository.getOrganizerProgram(event.id))?.sessions).toEqual(
           initial.sessions,
         );
+      } finally {
+        await harness.close();
+      }
+    });
+
+    it("keeps public visibility explicit while programme edits stay live", async () => {
+      const harness = await createHarness(
+        makeProgram({ event: { ...event, programState: "draft", publishedAt: null } }),
+      );
+      const draftSession: Session = {
+        ...opening,
+        id: "contract-explicit-publication-session",
+        slug: "contract-explicit-publication",
+        title: "Черновая сессия с часовым поясом",
+        startsAt: "2026-10-02T10:00:00+03:00",
+        endsAt: "2026-10-02T11:00:00+03:00",
+        locationId: null,
+        sortOrder: 2,
+      };
+      try {
+        await expect(harness.repository.getPublicProgramBySlug(event.slug)).resolves.toEqual({
+          status: "not_found",
+        });
+
+        await harness.repository.createSession({ session: draftSession, speakerIds: [] });
+        expect((await harness.repository.getOrganizerProgram(event.id))?.event.programState).toBe("draft");
+        await expect(harness.repository.getPublicProgramBySlug(event.slug)).resolves.toEqual({
+          status: "not_found",
+        });
+
+        await harness.repository.setProgramPublished(event.id, "2026-10-02T09:30:00+03:00");
+        const published = await harness.repository.getPublicProgramBySlug(event.slug);
+        expect(published.status).toBe("published");
+        if (published.status === "published") {
+          expect(published.program.sessions).toContainEqual({
+            ...draftSession,
+            startsAt: normalizeInstant(draftSession.startsAt),
+            endsAt: normalizeInstant(draftSession.endsAt),
+          });
+          expect(published.program.event.programState).toBe("published");
+        }
+
+        const liveEdit = {
+          ...draftSession,
+          title: "Обновлённая живая сессия",
+          startsAt: "2026-10-02T10:15:00+03:00",
+          endsAt: "2026-10-02T11:15:00+03:00",
+        };
+        await harness.repository.updateSession({
+          session: liveEdit,
+          speakerIds: [],
+          autoShiftFollowing: false,
+        });
+        const immediatelyUpdated = await harness.repository.getPublicProgramBySlug(event.slug);
+        expect(immediatelyUpdated.status).toBe("published");
+        if (immediatelyUpdated.status === "published") {
+          expect(immediatelyUpdated.program.sessions).toContainEqual({
+            ...liveEdit,
+            startsAt: normalizeInstant(liveEdit.startsAt),
+            endsAt: normalizeInstant(liveEdit.endsAt),
+          });
+          expect(immediatelyUpdated.program.event.programState).toBe("published");
+        }
+
+        await harness.repository.setProgramUnpublished(event.id);
+        await expect(harness.repository.getPublicProgramBySlug(event.slug)).resolves.toEqual({
+          status: "unavailable",
+        });
+        await harness.repository.updateSession({
+          session: { ...liveEdit, title: "Скрытая после снятия публикации сессия" },
+          speakerIds: [],
+          autoShiftFollowing: false,
+        });
+        await expect(harness.repository.getPublicProgramBySlug(event.slug)).resolves.toEqual({
+          status: "unavailable",
+        });
       } finally {
         await harness.close();
       }

@@ -11,6 +11,18 @@ import type { CompanionRepository } from "@/lib/data/repository";
 import { eventLocalDateTimeToInstant } from "@/lib/domain/presentation";
 import type { ProgramAggregate, Session } from "@/lib/domain/types";
 
+type OperationId =
+  | "program.create-session"
+  | "program.update-session"
+  | "program.delete-session"
+  | "program.reorder-sessions"
+  | "program.publish"
+  | "program.unpublish"
+  | "program.set-manual-current"
+  | "program.clear-manual-current";
+
+class CorrectableProgramInputError extends Error {}
+
 function value(formData: FormData, name: string): string {
   const field = formData.get(name);
   return typeof field === "string" ? field.trim() : "";
@@ -34,8 +46,13 @@ function revalidateProgram(program: ProgramAggregate): void {
   }
 }
 
+function logProgramActionFailure(operationId: OperationId, eventId: string): void {
+  console.error({ operationId, eventId, errorClass: "repository_failure" });
+}
+
 async function runOrganizerAction(
   eventId: string,
+  operationId: OperationId,
   successMessage: string,
   operation: (
     repository: CompanionRepository,
@@ -45,22 +62,28 @@ async function runOrganizerAction(
 ): Promise<never> {
   const actor = await requireOrganizer(`/organizer/events/${encodeURIComponent(eventId)}/program`);
 
-  const repository = getRepository();
-  const program = await repository.getOrganizerProgram(eventId);
+  let repository: CompanionRepository;
+  let program: ProgramAggregate | null;
+  try {
+    repository = getRepository();
+    program = await repository.getOrganizerProgram(eventId);
+  } catch {
+    logProgramActionFailure(operationId, eventId);
+    redirect(feedbackUrl(eventId, "error", "Не удалось сохранить изменения. Повторите попытку."));
+  }
   if (!program) redirect(feedbackUrl(eventId, "error", "Событие не найдено"));
 
-  let outcome: { tone: "success" | "error"; message: string };
   try {
     await operation(repository, program, actor.id);
     revalidateProgram(program);
-    outcome = { tone: "success", message: successMessage };
   } catch (error) {
-    outcome = {
-      tone: "error",
-      message: error instanceof Error ? error.message : "Не удалось сохранить изменения",
-    };
+    if (error instanceof CorrectableProgramInputError) {
+      redirect(feedbackUrl(eventId, "error", error.message));
+    }
+    logProgramActionFailure(operationId, eventId);
+    redirect(feedbackUrl(eventId, "error", "Не удалось сохранить изменения. Повторите попытку."));
   }
-  redirect(feedbackUrl(eventId, outcome.tone, outcome.message));
+  redirect(feedbackUrl(eventId, "success", successMessage));
 }
 
 function sessionFromForm(
@@ -71,8 +94,25 @@ function sessionFromForm(
   const title = value(formData, "title");
   const slug = value(formData, "slug");
   const summary = value(formData, "summary");
-  if (title.length > 140) throw new Error("Название не должно превышать 140 символов");
-  if (summary.length > 1200) throw new Error("Описание не должно превышать 1200 символов");
+  if (!title) throw new CorrectableProgramInputError("Укажите название сессии");
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
+    throw new CorrectableProgramInputError("Используйте корректный slug сессии");
+  }
+  if (title.length > 140) {
+    throw new CorrectableProgramInputError("Название не должно превышать 140 символов");
+  }
+  if (summary.length > 1200) {
+    throw new CorrectableProgramInputError("Описание не должно превышать 1200 символов");
+  }
+
+  let startsAt: string;
+  let endsAt: string;
+  try {
+    startsAt = eventLocalDateTimeToInstant(value(formData, "startsAtLocal"), program.event.timezone);
+    endsAt = eventLocalDateTimeToInstant(value(formData, "endsAtLocal"), program.event.timezone);
+  } catch {
+    throw new CorrectableProgramInputError("Укажите корректные дату и время сессии");
+  }
 
   const locationId = value(formData, "locationId") || null;
   const speakerIds = formData
@@ -86,14 +126,8 @@ function sessionFromForm(
       slug,
       title,
       summary,
-      startsAt: eventLocalDateTimeToInstant(
-        value(formData, "startsAtLocal"),
-        program.event.timezone,
-      ),
-      endsAt: eventLocalDateTimeToInstant(
-        value(formData, "endsAtLocal"),
-        program.event.timezone,
-      ),
+      startsAt,
+      endsAt,
       locationId,
       sortOrder: options.sortOrder,
     },
@@ -103,7 +137,7 @@ function sessionFromForm(
 
 export async function createSessionAction(formData: FormData): Promise<never> {
   const eventId = value(formData, "eventId");
-  return runOrganizerAction(eventId, "Сессия создана", async (repository, program) => {
+  return runOrganizerAction(eventId, "program.create-session", "Сессия создана", async (repository, program) => {
     const nextSortOrder =
       Math.max(-1, ...program.sessions.map((session) => session.sortOrder)) + 1;
     await repository.createSession(
@@ -115,35 +149,38 @@ export async function createSessionAction(formData: FormData): Promise<never> {
 export async function updateSessionAction(formData: FormData): Promise<never> {
   const eventId = value(formData, "eventId");
   const sessionId = value(formData, "sessionId");
-  return runOrganizerAction(eventId, "Сессия обновлена", async (repository, program) => {
+  return runOrganizerAction(eventId, "program.update-session", "Сессия обновлена", async (repository, program) => {
     const existing = program.sessions.find((session) => session.id === sessionId);
-    if (!existing) throw new Error("Сессия не найдена");
-    await repository.updateSession(
-      {
-        ...sessionFromForm(formData, program, {
-          id: existing.id,
-          sortOrder: existing.sortOrder,
-        }),
-        autoShiftFollowing: checked(formData, "autoShiftFollowing"),
-      },
-    );
+    if (!existing) throw new CorrectableProgramInputError("Сессия не найдена");
+    await repository.updateSession({
+      ...sessionFromForm(formData, program, {
+        id: existing.id,
+        sortOrder: existing.sortOrder,
+      }),
+      autoShiftFollowing: checked(formData, "autoShiftFollowing"),
+    });
   });
 }
 
 export async function deleteSessionAction(formData: FormData): Promise<never> {
   const eventId = value(formData, "eventId");
   const sessionId = value(formData, "sessionId");
-  return runOrganizerAction(eventId, "Сессия удалена", async (repository) => {
+  return runOrganizerAction(eventId, "program.delete-session", "Сессия удалена", async (repository) => {
     await repository.deleteSession(eventId, sessionId);
   });
 }
 
 export async function reorderSessionsAction(formData: FormData): Promise<never> {
   const eventId = value(formData, "eventId");
-  return runOrganizerAction(eventId, "Новый порядок сохранён", async (repository) => {
-    const parsed: unknown = JSON.parse(value(formData, "orderedSessionIds"));
+  return runOrganizerAction(eventId, "program.reorder-sessions", "Новый порядок сохранён", async (repository) => {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(value(formData, "orderedSessionIds"));
+    } catch {
+      throw new CorrectableProgramInputError("Некорректный набор сессий для сортировки");
+    }
     if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== "string")) {
-      throw new Error("Некорректный набор сессий для сортировки");
+      throw new CorrectableProgramInputError("Некорректный набор сессий для сортировки");
     }
     await repository.reorderSessions(eventId, parsed);
   });
@@ -151,14 +188,14 @@ export async function reorderSessionsAction(formData: FormData): Promise<never> 
 
 export async function publishProgramAction(formData: FormData): Promise<never> {
   const eventId = value(formData, "eventId");
-  return runOrganizerAction(eventId, "Программа опубликована", async (repository) => {
+  return runOrganizerAction(eventId, "program.publish", "Программа опубликована", async (repository) => {
     await repository.setProgramPublished(eventId, new Date().toISOString());
   });
 }
 
 export async function unpublishProgramAction(formData: FormData): Promise<never> {
   const eventId = value(formData, "eventId");
-  return runOrganizerAction(eventId, "Программа снята с публикации", async (repository) => {
+  return runOrganizerAction(eventId, "program.unpublish", "Программа снята с публикации", async (repository) => {
     await repository.setProgramUnpublished(eventId);
   });
 }
@@ -166,19 +203,24 @@ export async function unpublishProgramAction(formData: FormData): Promise<never>
 export async function setManualCurrentAction(formData: FormData): Promise<never> {
   const eventId = value(formData, "eventId");
   const sessionId = value(formData, "sessionId");
-  return runOrganizerAction(eventId, "Текущая сессия выбрана вручную", async (repository, _, actorId) => {
-    await repository.setManualCurrentSession(
-      eventId,
-      sessionId,
-      actorId,
-      new Date().toISOString(),
-    );
-  });
+  return runOrganizerAction(
+    eventId,
+    "program.set-manual-current",
+    "Текущая сессия выбрана вручную",
+    async (repository, _, actorId) => {
+      await repository.setManualCurrentSession(eventId, sessionId, actorId, new Date().toISOString());
+    },
+  );
 }
 
 export async function clearManualCurrentAction(formData: FormData): Promise<never> {
   const eventId = value(formData, "eventId");
-  return runOrganizerAction(eventId, "Ручной выбор снят — действует расписание", async (repository) => {
-    await repository.clearManualCurrentSession(eventId);
-  });
+  return runOrganizerAction(
+    eventId,
+    "program.clear-manual-current",
+    "Ручной выбор снят — действует расписание",
+    async (repository) => {
+      await repository.clearManualCurrentSession(eventId);
+    },
+  );
 }

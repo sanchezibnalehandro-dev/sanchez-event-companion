@@ -15,6 +15,7 @@ export function SessionCard({
   status,
   isNext = false,
   showSummary = false,
+  navigationMode = "public",
 }: {
   program: ProgramAggregate;
   session: Session;
@@ -22,6 +23,7 @@ export function SessionCard({
   status?: SessionTimelineStatus;
   isNext?: boolean;
   showSummary?: boolean;
+  navigationMode?: "public" | "preview";
 }) {
   const location = getSessionLocation(program, session);
   const speakers = getSessionSpeakers(program, session.id);
@@ -47,9 +49,11 @@ export function SessionCard({
           </div>
         ) : null}
         <h2>
-          <Link href={`/e/${program.event.slug}/sessions/${session.slug}`}>
-            {session.title}
-          </Link>
+          {navigationMode === "public" ? (
+            <Link href={`/e/${program.event.slug}/sessions/${session.slug}`}>
+              {session.title}
+            </Link>
+          ) : session.title}
         </h2>
         {location ? <p className="meta">{location}</p> : null}
         {speakers.length > 0 ? (

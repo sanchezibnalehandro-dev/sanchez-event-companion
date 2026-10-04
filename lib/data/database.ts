@@ -1,3 +1,4 @@
+import { createPostgresPoolConfig } from "@/lib/data/postgres-connection";
 import { PostgresCompanionRepository } from "@/lib/data/postgres-repository";
 import type { CompanionRepository } from "@/lib/data/repository";
 import { SqliteCompanionRepository } from "@/lib/data/sqlite-repository";
@@ -10,7 +11,11 @@ export type DatabaseConfig =
 
 type DatabaseEnvironment = Partial<
   Record<
-    "NODE_ENV" | "EVENT_COMPANION_DATABASE_DRIVER" | "EVENT_COMPANION_DATABASE_PATH" | "DATABASE_URL",
+    | "NODE_ENV"
+    | "EVENT_COMPANION_DATABASE_DRIVER"
+    | "EVENT_COMPANION_DATABASE_PATH"
+    | "DATABASE_URL"
+    | "DATABASE_CA_CERT",
     string | undefined
   >
 >;
@@ -28,6 +33,9 @@ export function resolveDatabaseConfig(environment: DatabaseEnvironment): Databas
   if (driver === "postgres") {
     const databaseUrl = environment.DATABASE_URL?.trim();
     if (!databaseUrl) throw new Error("DATABASE_URL is required for PostgreSQL");
+    if (environment.NODE_ENV === "production") {
+      createPostgresPoolConfig(databaseUrl, environment.DATABASE_CA_CERT, { strict: true });
+    }
     return { driver, databaseUrl };
   }
 

@@ -10,41 +10,61 @@ not own Q&A rooms, questions, votes, moderation, or Q&A current-room state.
 
 ## Current scope
 
-Implemented:
+Implemented and verified in the current product line:
 
 - mobile-first TODAY with actual NOW, NEXT and a neutral LIVE CTA;
 - published PROGRAM with past/current/concurrent/upcoming states;
-- session detail with location, summary and all assigned speakers;
+- session detail with location, summary and assigned speakers;
 - organizer session create/edit/delete, multi-speaker assignment and location choice;
-- one-transaction session reorder;
+- location-aware transactional schedule shifting with parallel program lanes;
 - explicit publish/unpublish;
 - explicit set/clear manual current override;
-- safe local demo seed with eight fictional sessions, parallel locations, gaps, a panel and a non-LIVE break;
+- safe local demo seed with fictional sessions, gaps, parallel locations and non-LIVE blocks;
 - server-side publication filtering;
 - link-only SANCHEZ LIVE Q&A adapter;
-- production organizer email/password authentication with PostgreSQL-backed sessions;
-- a minimal Organizer Console root and explicit logout.
+- PostgreSQL production persistence;
+- PostgreSQL-backed organizer email/password authentication and sessions;
+- verified PostgreSQL TLS with provider CA validation;
+- Timeweb Cloud App Platform production deployment in Moscow;
+- a minimal authenticated Organizer Console root and explicit logout.
 
-Explicitly out of scope:
+Explicitly out of scope until a concrete requirement exists:
 
 - People, participant profiles, Meetings, messaging and AI;
 - Word Cloud, backstage tasks and speaker self-service;
 - a Q&A status API or direct Q&A database access;
-- hosted deployment, unified Q&A management authentication and infrastructure rollout.
+- shared Companion/Q&A database ownership;
+- iframe embedding of LIVE Q&A;
+- unified Q&A management authentication;
+- custom production domain and broader event-platform expansion.
 
 In this product, **current session means event current state, not Q&A current
-room**. Q&A state never participates in the resolver.
+room**. Q&A state never participates in the event-current resolver.
 
 ## Stack
 
+Application:
+
 - Next.js 16 App Router and React 19;
 - strict TypeScript;
+- Node.js 24;
 - server components and server actions;
-- PostgreSQL production persistence and Node.js built-in SQLite for local demo;
 - Vitest and ESLint;
 - no UI framework, ORM, Supabase client or Q&A SDK.
 
-SQLite is a local demo persistence layer. It is not the production hosting decision.
+Persistence:
+
+- PostgreSQL is the production persistence backend;
+- Node.js built-in SQLite remains supported for local/demo compatibility only.
+
+Production hosting:
+
+- Timeweb Cloud App Platform for the SSR application;
+- Timeweb Cloud PostgreSQL;
+- Moscow region for both services.
+
+The production stack and trust boundary are accepted architecture decisions. Do not
+switch provider, persistence model or TLS policy as incidental cleanup.
 
 ## Local demo
 
@@ -79,10 +99,21 @@ event link supplied by the organizer; it does not assume a production event slug
 
 ## Production PostgreSQL
 
-Timeweb production requires `DATABASE_CA_CERT` alongside `DATABASE_URL`. Set it
-to the complete multiline root CA PEM, including the `BEGIN CERTIFICATE` and
-`END CERTIFICATE` lines, not to a local path such as `ca.crt`. PostgreSQL TLS
-certificate verification remains enabled.
+Production requires:
+
+```text
+EVENT_COMPANION_DATABASE_DRIVER=postgres
+DATABASE_URL=<production PostgreSQL URL>
+DATABASE_CA_CERT=<complete Timeweb root CA PEM>
+```
+
+`DATABASE_URL` uses the provider database domain rather than a hard-coded raw IP.
+`DATABASE_CA_CERT` contains the complete PEM value, including the certificate boundary
+lines; it is not a local filesystem path.
+
+PostgreSQL TLS certificate verification remains enabled with
+`rejectUnauthorized=true`. Do not disable verification as a workaround and do not
+commit production connection strings, passwords, CA contents or other secrets.
 
 ## Commands
 
@@ -96,6 +127,10 @@ npm run dev:demo
 npm run organizer:create
 ```
 
+The organizer creation CLI currently has known Windows password-input UX debt. Do
+not use ad-hoc production password-reset one-liners as a normal maintenance path;
+a dedicated reset command is planned.
+
 ## Event current-session rule
 
 The resolver is deterministic and accepts an explicit clock:
@@ -105,8 +140,9 @@ The resolver is deterministic and accepts an explicit clock:
 3. `null`.
 
 When manual NOW is active, NEXT follows the saved program order after that session.
-Otherwise NEXT is the earliest future session. Gaps remain gaps; overlapping planned
-sessions are marked separately rather than silently hidden.
+Otherwise NEXT is the earliest future session. Gaps remain gaps. Parallel active
+sessions remain visible as concurrent context while one deterministic session remains
+the primary effective NOW state.
 
 ## Publication behavior
 
@@ -125,7 +161,24 @@ uses the integration's `external_event_key`:
 https://sanchez-live-qna.vercel.app/ask.html?event=<event_key>
 ```
 
-There is no iframe, Q&A Supabase access, write, `questions_open` inference, or
-`/api/public/live-context`. Unmapped sessions simply omit the CTA.
+There is no iframe, Q&A Supabase access, direct write, `questions_open` inference,
+or current assumption of a public LIVE status endpoint. Unmapped sessions simply omit
+the CTA.
 
-See [Architecture](docs/ARCHITECTURE.md) and [Decisions](docs/DECISIONS.md).
+## Source of truth and project state
+
+- GitHub `main` is source-code truth;
+- Timeweb PostgreSQL is production database/runtime truth;
+- Timeweb App Platform is deployed-application truth;
+- repository docs record durable architecture and checkpoints, not volatile live values.
+
+Before production-sensitive work, verify the connected service rather than trusting a
+stored URL, IP, environment value or deployment state.
+
+Current accepted architecture and handoff documents:
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Decisions](docs/DECISIONS.md)
+- [ADR-001 — Event Companion / LIVE Q&A Boundary](docs/ADR-001_EVENT_COMPANION_LIVE_BOUNDARY_v3.md)
+- [ADR-002 — Event Companion Production Stack](docs/ADR-002_EVENT_COMPANION_PRODUCTION_STACK.md)
+- [Project State — 2026-10-03](docs/EVENT_COMPANION_STATE_2026-10-03.md)

@@ -50,7 +50,11 @@ export class PostgresOrganizerAuthStore implements OrganizerAuthStore {
 
   static open(databaseUrl: string): PostgresOrganizerAuthStore {
     return new PostgresOrganizerAuthStore(
-      new Pool(createPostgresPoolConfig(databaseUrl)),
+      new Pool(
+        createPostgresPoolConfig(databaseUrl, process.env.DATABASE_CA_CERT, {
+          strict: process.env.NODE_ENV === "production",
+        }),
+      ),
     );
   }
 
