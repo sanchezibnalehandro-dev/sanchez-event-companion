@@ -7,16 +7,23 @@ import { event, location, makeProgram, opening, panel } from "@/tests/helpers/fi
 const repositoryMock = vi.hoisted(() => ({
   getPublicProgramBySlug: vi.fn(),
 }));
+const notFoundMock = vi.hoisted(() =>
+  vi.fn(() => {
+    throw new Error("NEXT_NOT_FOUND");
+  }),
+);
 
 vi.mock("@/lib/data/database", () => ({
   getRepository: () => repositoryMock,
 }));
+vi.mock("next/navigation", () => ({ notFound: notFoundMock }));
 
 import ProgramPage from "@/app/e/[eventSlug]/program/page";
 
 describe("guest program page", () => {
   beforeEach(() => {
     repositoryMock.getPublicProgramBySlug.mockReset();
+    notFoundMock.mockClear();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-10-02T07:30:00.000Z"));
   });
@@ -99,5 +106,29 @@ describe("guest program page", () => {
     expect(markup).toContain('class="program-time-group"');
     expect(markup).toContain("Время по Москве");
     expect(markup).not.toContain("Europe/Moscow");
+  });
+
+  it("fails closed without NOW or LIVE payload for unavailable unpublished content", async () => {
+    repositoryMock.getPublicProgramBySlug.mockResolvedValue({ status: "unavailable" });
+
+    const page = await ProgramPage({ params: Promise.resolve({ eventSlug: event.slug }) });
+    const markup = renderToStaticMarkup(page);
+
+    expect(markup).toContain("Скоро здесь появится расписание");
+    expect(markup).not.toContain(event.title);
+    expect(markup).not.toContain(opening.title);
+    expect(markup).not.toContain(panel.title);
+    expect(markup).not.toContain("Сейчас идёт");
+    expect(markup).not.toContain("LIVE Q&amp;A");
+    expect(markup).not.toContain("sanchez-live-qna.vercel.app");
+  });
+
+  it("terminates a missing public program without rendering event payload", async () => {
+    repositoryMock.getPublicProgramBySlug.mockResolvedValue({ status: "not_found" });
+
+    await expect(
+      ProgramPage({ params: Promise.resolve({ eventSlug: event.slug }) }),
+    ).rejects.toThrow("NEXT_NOT_FOUND");
+    expect(notFoundMock).toHaveBeenCalledOnce();
   });
 });

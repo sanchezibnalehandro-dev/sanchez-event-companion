@@ -36,6 +36,22 @@ describe("resolveEffectiveCurrentSession", () => {
     expect(result).toEqual({ session: opening, source: "planned" });
   });
 
+  it("returns to the planned schedule when the manual override is cleared", () => {
+    const result = resolveEffectiveCurrentSession({
+      eventId: event.id,
+      sessions: [opening, panel],
+      runtime: {
+        eventId: event.id,
+        manualCurrentSessionId: null,
+        overrideSetAt: null,
+        overrideSetBy: null,
+      },
+      now: new Date("2026-10-02T07:30:00.000Z"),
+    });
+
+    expect(result).toEqual({ session: opening, source: "planned" });
+  });
+
   it("returns null when no planned session matches", () => {
     const result = resolveEffectiveCurrentSession({
       eventId: event.id,
@@ -47,12 +63,24 @@ describe("resolveEffectiveCurrentSession", () => {
     expect(result).toBeNull();
   });
 
-  it("uses inclusive start and exclusive end boundaries", () => {
+  it("selects a scheduled current only inside the inclusive-start exclusive-end window", () => {
+    const beforeStart = resolveEffectiveCurrentSession({
+      eventId: event.id,
+      sessions: [opening],
+      runtime: null,
+      now: new Date("2026-10-02T06:59:59.999Z"),
+    });
     const atStart = resolveEffectiveCurrentSession({
       eventId: event.id,
       sessions: [opening],
       runtime: null,
       now: new Date(opening.startsAt),
+    });
+    const beforeEnd = resolveEffectiveCurrentSession({
+      eventId: event.id,
+      sessions: [opening],
+      runtime: null,
+      now: new Date("2026-10-02T07:59:59.999Z"),
     });
     const atEnd = resolveEffectiveCurrentSession({
       eventId: event.id,
@@ -61,7 +89,26 @@ describe("resolveEffectiveCurrentSession", () => {
       now: new Date(opening.endsAt),
     });
 
-    expect(atStart?.session.id).toBe(opening.id);
+    expect(beforeStart).toBeNull();
+    expect(atStart).toEqual({ session: opening, source: "planned" });
+    expect(beforeEnd).toEqual({ session: opening, source: "planned" });
     expect(atEnd).toBeNull();
+  });
+
+  it("compares Europe/Moscow offset windows as absolute instants", () => {
+    const moscowWindow = {
+      ...opening,
+      startsAt: "2026-10-02T10:00:00+03:00",
+      endsAt: "2026-10-02T11:00:00+03:00",
+    };
+
+    const result = resolveEffectiveCurrentSession({
+      eventId: event.id,
+      sessions: [moscowWindow],
+      runtime: null,
+      now: new Date("2026-10-02T07:30:00.000Z"),
+    });
+
+    expect(result).toEqual({ session: moscowWindow, source: "planned" });
   });
 });
